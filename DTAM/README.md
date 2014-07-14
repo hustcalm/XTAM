@@ -5,9 +5,9 @@ DTAM
 
 On the Implementation of DTAM, follow the steps below:
 
-*   Implement the key Mapping and Tracking algorithms using offline video calibrated sequeces(CPU)
-*   Implement the key Mapping and Tracking algorithms using offline video calibrated sequeces(GPU)
-*   Implement the initialization algorithms
+*   Implement the key Mapping and Tracking algorithms using offline video calibrated sequences(CPU)
+*   Implement the key Mapping and Tracking algorithms using offline video calibrated sequences(GPU)
+*   Implement the initialization algorithms(follow PTAM)
 *   Implement the key Mapping and Tracking algorithms using online camera(GPU)
 *   Integrate Initialization, Mapping and Tracking into a framework(like PTAM)
 
