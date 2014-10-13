@@ -53,7 +53,7 @@ int PatchFinder::CalcSearchLevelAndWarpMatrix(MapPoint &p,
   while(dDet > 3 && mnSearchLevel < LEVELS-1)
     {
       mnSearchLevel++;
-      dDet *= 0.25;
+      dDet *= 0.25; // (1/2)^l
     };
   
   // Some warps are inappropriate, e.g. too near the camera, too far, or reflected, 

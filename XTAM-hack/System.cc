@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include "ATANCamera.h"
 #include "MapMaker.h"
+//#include "DenseMapMaker.h"
 #include "Tracker.h"
 #include "ARDriver.h"
 #include "MapViewer.h"
@@ -36,7 +37,9 @@ System::System()
   vTest = GV3::get<Vector<NUMTRACKERCAMPARAMETERS> >("Camera.Parameters", ATANCamera::mvDefaultParams, HIDDEN);
 
   // Construct a live camera
+  cout << "Constucting the camera..." << endl;
   mpCamera = new ATANCamera("Camera");
+  cout << "Done!" << endl;
 
   // I believe the below 2 lines are for test of '==' of vector
   Vector<2> v2;
@@ -56,6 +59,7 @@ System::System()
   // The MapMaker object will live in its own thread
   mpMap = new Map;
   mpMapMaker = new MapMaker(*mpMap, *mpCamera);
+  //mpDenseMapMaker = new DenseMapMaker(*mpMap, *mpCamera);
   mpTracker = new Tracker(mVideoSource.Size(), *mpCamera, *mpMap, *mpMapMaker);
   mpARDriver = new ARDriver(*mpCamera, mVideoSource.Size(), mGLWindow);
   mpMapViewer = new MapViewer(*mpMap, mGLWindow);

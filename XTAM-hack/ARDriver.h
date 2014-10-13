@@ -30,7 +30,7 @@ class ARDriver
   void Reset();
   void Init();
  protected:
-  ATANCamera mCamera;
+  ATANCamera mCamera; // N.B. This is not a camera reference here
   GLWindow2 &mGLWindow;
   void DrawFadingGrid();
   void MakeFrameBuffer();

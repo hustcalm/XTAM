@@ -34,9 +34,9 @@ class SmallBlurryImage;
 // Candidate: a feature in an image which could be made into a map point
 struct Candidate
 {
-  CVD::ImageRef irLevelPos;
-  Vector<2> v2RootPos;
-  double dSTScore;
+  CVD::ImageRef irLevelPos; // Level position on LEVEL
+  Vector<2> v2RootPos; // Position REFERED TO PYRAMID LEVEL ZERO
+  double dSTScore; // ShiTomasi Score
 };
 
 // Measurement: A 2D image measurement of a map point. Each keyframe stores a bunch of these.

@@ -4,7 +4,7 @@
 // MEstimator.h
 //
 // Defines various MEstimators which can be used by the Tracker and
-// the Bundle adjuster. Not that some of the inputs are square
+// the Bundle adjuster. Note that some of the inputs are square
 // quantities!
 
 #ifndef __MESTIMATOR_H

@@ -1,5 +1,6 @@
 // Copyright 2008 Isis Innovation Limited
-#include "MapMaker.h"
+#include "DenseMapMaker.h"
+#include "OpenGL.h"
 #include "MapPoint.h"
 #include "Bundle.h"
 #include "PatchFinder.h"
@@ -16,7 +17,6 @@
 #include <gvars3/instances.h>
 #include <fstream>
 #include <algorithm>
-#include <cfloat>
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -29,22 +29,38 @@ using namespace GVars3;
 
 // Constructor sets up internal reference variable to Map.
 // Most of the intialisation is done by Reset()..
-MapMaker::MapMaker(Map& m, const ATANCamera &cam)
-  : mMap(m), mCamera(cam)
+DenseMapMaker::DenseMapMaker(Map& m, const ATANCamera &cam)
+  : mMap(m), mCamera(cam), mGLWindow(ImageRef(640,480), "DTAM-Map")
 {
+  // Register callback functions to GUI
+  GUI.RegisterCommand("exit", GUICommandCallBack, this);
+  GUI.RegisterCommand("quit", GUICommandCallBack, this);
+
   mbResetRequested = false;
   Reset();
   start(); // This CVD::thread func starts the map-maker thread with function run()
   GUI.RegisterCommand("SaveMap", GUICommandCallBack, this);
-  GV3::Register(mgvdWiggleScale, "MapMaker.WiggleScale", 0.1, SILENT); // Default to 10cm between keyframes
+  GV3::Register(mgvdWiggleScale, "DenseMapMaker.WiggleScale", 0.1, SILENT); // Default to 10cm between keyframes
+
+
+  // Draw the menus out on the GUI using ParseLine
+  // Note that the 'GUI' object is made live in 'gvars3/inst.cc'
+  GUI.ParseLine("GLWindow.AddMenu Menu Menu");
+  GUI.ParseLine("Menu.ShowMenu Root");
+  GUI.ParseLine("Menu.AddMenuButton Root Reset Reset Root");
+  GUI.ParseLine("Menu.AddMenuButton Root Spacebar PokeTracker Root");
+  GUI.ParseLine("DrawAR=0");
+  GUI.ParseLine("DrawMap=0");
+  GUI.ParseLine("Menu.AddMenuToggle Root \"View Map\" DrawMap Root");
+  GUI.ParseLine("Menu.AddMenuToggle Root \"Draw AR\" DrawAR Root");
 };
 
-void MapMaker::Reset()
+void DenseMapMaker::Reset()
 {
   // This is only called from within the mapmaker thread...
-  mMap.Reset(); // clear the map
-  mvFailureQueue.clear(); // clear the failure queue
-  while(!mqNewQueue.empty()) mqNewQueue.pop(); // discard any un-processed keyframes
+  mMap.Reset();
+  mvFailureQueue.clear();
+  while(!mqNewQueue.empty()) mqNewQueue.pop();
   mMap.vpKeyFrames.clear(); // TODO: actually erase old keyframes
   mvpKeyFrameQueue.clear(); // TODO: actually erase old keyframes
   mbBundleRunning = false;
@@ -59,7 +75,7 @@ void MapMaker::Reset()
 // what it's doing and reset, if required.
 #define CHECK_RESET if(mbResetRequested) {Reset(); continue;};
 
-void MapMaker::run()
+void DenseMapMaker::run()
 {
 
 #ifdef WIN32
@@ -69,6 +85,12 @@ void MapMaker::run()
 
     while(!shouldStop()) 
     {
+      // As we invoke the blow 3 lines for every frame
+      // this should be related to each camera frame for display
+      mGLWindow.SetupViewport();
+      mGLWindow.SetupVideoOrtho();
+      mGLWindow.SetupVideoRasterPosAndZoom();
+
       CHECK_RESET;
       sleep(5); // Sleep not really necessary, especially if mapmaker is busy
       CHECK_RESET;
@@ -93,84 +115,32 @@ void MapMaker::run()
       // Any new key-frames to be added?
       if(QueueSize() > 0)
 	      AddKeyFrameFromTopOfQueue(); // Integrate into map data struct, and process
+
+      
+      string sCaption;
+      sCaption = "DenseMapMaker Window...";
+      mGLWindow.DrawCaption(sCaption);
+      mGLWindow.DrawMenus();
+      mGLWindow.swap_buffers();
+      mGLWindow.HandlePendingEvents();
     }
 }
-
-void MapMaker::run_ptam()
-{
-
-#ifdef WIN32
-  // For some reason, I get tracker thread starvation on Win32 when
-  // adding key-frames. Perhaps this will help:
-  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_LOWEST);
-#endif
-
-  while(!shouldStop())  // ShouldStop is a CVD::Thread func which return true if the thread is told to exit.
-    {
-      CHECK_RESET;
-      sleep(5); // Sleep not really necessary, especially if mapmaker is busy
-      CHECK_RESET;
-      
-      // Handle any GUI commands encountered..
-      while(!mvQueuedCommands.empty())
-	{
-	  GUICommandHandler(mvQueuedCommands.begin()->sCommand, mvQueuedCommands.begin()->sParams);
-	  mvQueuedCommands.erase(mvQueuedCommands.begin());
-	}
-      
-      if(!mMap.IsGood())  // Nothing to do if there is no map yet!
-	      continue;
-      
-      // From here on, mapmaker does various map-maintenance jobs in a certain priority
-      // Hierarchy. For example, if there's a new key-frame to be added (QueueSize() is >0)
-      // then that takes high priority.
-      
-      CHECK_RESET;
-      // Should we run local bundle adjustment?
-      if(!mbBundleConverged_Recent && QueueSize() == 0)  
-	      BundleAdjustRecent();   
-      
-      CHECK_RESET;
-      // Are there any newly-made map points which need more measurements from older key-frames?
-      if(mbBundleConverged_Recent && QueueSize() == 0)
-	      ReFindNewlyMade();  
-      
-      CHECK_RESET;
-      // Run global bundle adjustment?
-      if(mbBundleConverged_Recent && !mbBundleConverged_Full && QueueSize() == 0)
-	      BundleAdjustAll();
-      
-      CHECK_RESET;
-      // Very low priorty: re-find measurements marked as outliers
-      if(mbBundleConverged_Recent && mbBundleConverged_Full && rand()%20 == 0 && QueueSize() == 0)
-	      ReFindFromFailureQueue();
-      
-      CHECK_RESET;
-      HandleBadPoints();
-      
-      CHECK_RESET;
-      // Any new key-frames to be added?
-      if(QueueSize() > 0)
-	      AddKeyFrameFromTopOfQueue(); // Integrate into map data struct, and process
-    }
-}
-
 
 // Tracker calls this to demand a reset
-void MapMaker::RequestReset()
+void DenseMapMaker::RequestReset()
 {
   mbResetDone = false;
   mbResetRequested = true;
 }
 
-bool MapMaker::ResetDone()
+bool DenseMapMaker::ResetDone()
 {
   return mbResetDone;
 }
 
 // HandleBadPoints() Does some heuristic checks on all points in the map to see if 
 // they should be flagged as bad, based on tracker feedback.
-void MapMaker::HandleBadPoints()
+void DenseMapMaker::HandleBadPoints()
 {
   // Did the tracker see this point as an outlier more often than as an inlier?
   for(unsigned int i=0; i<mMap.vpPoints.size(); i++)
@@ -197,7 +167,7 @@ void MapMaker::HandleBadPoints()
   mMap.MoveBadPointsToTrash();
 }
 
-MapMaker::~MapMaker()
+DenseMapMaker::~DenseMapMaker()
 {
   mbBundleAbortRequested = true;
   stop(); // makes shouldStop() return true
@@ -208,7 +178,7 @@ MapMaker::~MapMaker()
 
 
 // Finds 3d coords of point in reference frame B from two z=1 plane projections
-Vector<3> MapMaker::ReprojectPoint(SE3<> se3AfromB, const Vector<2> &v2A, const Vector<2> &v2B)
+Vector<3> DenseMapMaker::ReprojectPoint(SE3<> se3AfromB, const Vector<2> &v2A, const Vector<2> &v2B)
 {
   Matrix<3,4> PDash;
   PDash.slice<0,0,3,3>() = se3AfromB.get_rotation().get_matrix();
@@ -231,7 +201,7 @@ Vector<3> MapMaker::ReprojectPoint(SE3<> se3AfromB, const Vector<2> &v2A, const 
 
 // InitFromStereo() generates the initial match from two keyframes
 // and a vector of image correspondences. Uses the 
-bool MapMaker::InitFromStereo(KeyFrame &kF,
+bool DenseMapMaker::InitFromStereo(KeyFrame &kF,
 			      KeyFrame &kS,
 			      vector<pair<ImageRef, ImageRef> > &vTrailMatches,
 			      SE3<> &se3TrackerPose)
@@ -322,7 +292,7 @@ bool MapMaker::InitFromStereo(KeyFrame &kF,
  	}
       
       // Not behind map? Good, then add to map.
-      p->pMMData = new MapMakerData();
+      p->pDMMData = new DenseMapMakerData();
       mMap.vpPoints.push_back(p);
       
       // Construct first two measurements and insert into relevant DBs:
@@ -332,7 +302,7 @@ bool MapMaker::InitFromStereo(KeyFrame &kF,
       mFirst.v2RootPos = vec(vTrailMatches[i].first);
       mFirst.bSubPix = true;
       pkFirst->mMeasurements[p] = mFirst;
-      p->pMMData->sMeasurementKFs.insert(pkFirst);
+      p->pDMMData->sMeasurementKFs.insert(pkFirst);
       
       Measurement mSecond;
       mSecond.nLevel = 0;
@@ -340,7 +310,7 @@ bool MapMaker::InitFromStereo(KeyFrame &kF,
       mSecond.v2RootPos = finder.GetSubPixPos();
       mSecond.bSubPix = true;
       pkSecond->mMeasurements[p] = mSecond;
-      p->pMMData->sMeasurementKFs.insert(pkSecond);
+      p->pDMMData->sMeasurementKFs.insert(pkSecond);
     }
   
   mMap.vpKeyFrames.push_back(pkFirst);
@@ -378,40 +348,7 @@ bool MapMaker::InitFromStereo(KeyFrame &kF,
   mMap.bGood = true;
   se3TrackerPose = pkSecond->se3CfromW;
   
-  cout << "  MapMaker: made initial map with " << mMap.vpPoints.size() << " points." << endl;
-  // Let's see the depth of the points
-  float maxDepth = DBL_MIN;
-  float minDepth = DBL_MAX;
-  unsigned int maxDepthIndex = 0;
-  unsigned int minDepthIndex = 0;
-
-  cout << "X    " << "Y    " << "Z    " << endl;
-  for(unsigned int i  = 0; i < mMap.vpPoints.size(); ++i) {
-      cout << mMap.vpPoints[i]->v3WorldPos[0] << " " 
-           << mMap.vpPoints[i]->v3WorldPos[1] << " "
-           << mMap.vpPoints[i]->v3WorldPos[2] << endl;
-
-      if(mMap.vpPoints[i]->v3WorldPos[2] > maxDepth) {
-          maxDepth = mMap.vpPoints[i]->v3WorldPos[2];
-          maxDepthIndex = i;
-      }
-
-      if(mMap.vpPoints[i]->v3WorldPos[2] < minDepth) {
-          minDepth = mMap.vpPoints[i]->v3WorldPos[2];
-          minDepthIndex = i;
-      }
-  }
-
-  cout << "MinDepth Point:" << endl;
-  cout << mMap.vpPoints[minDepthIndex]->v3WorldPos[0] << " " 
-       << mMap.vpPoints[minDepthIndex]->v3WorldPos[1] << " "
-       << mMap.vpPoints[minDepthIndex]->v3WorldPos[2] << endl;
-
-  cout << "MaxDepth Point:" << endl;
-  cout << mMap.vpPoints[maxDepthIndex]->v3WorldPos[0] << " " 
-       << mMap.vpPoints[maxDepthIndex]->v3WorldPos[1] << " "
-       << mMap.vpPoints[maxDepthIndex]->v3WorldPos[2] << endl;
-
+  cout << "  DenseMapMaker: made initial map with " << mMap.vpPoints.size() << " points." << endl;
   return true; 
 }
 
@@ -420,7 +357,7 @@ bool MapMaker::InitFromStereo(KeyFrame &kF,
 // to make a new map point by epipolar search. We don't want to make new points
 // where there are already existing map points, this routine erases such candidates.
 // Operates on a single level of a keyframe.
-void MapMaker::ThinCandidates(KeyFrame &k, int nLevel)
+void DenseMapMaker::ThinCandidates(KeyFrame &k, int nLevel)
 {
   vector<Candidate> &vCSrc = k.aLevels[nLevel].vCandidates;
   vector<Candidate> vCGood;
@@ -458,7 +395,7 @@ void MapMaker::ThinCandidates(KeyFrame &k, int nLevel)
 // Adds map points by epipolar search to the last-added key-frame, at a single
 // specified pyramid level. Does epipolar search in the target keyframe as closest by
 // the ClosestKeyFrame function.
-void MapMaker::AddSomeMapPoints(int nLevel)
+void DenseMapMaker::AddSomeMapPoints(int nLevel)
 {
   KeyFrame &kSrc = *(mMap.vpKeyFrames[mMap.vpKeyFrames.size() - 1]); // The new keyframe
   KeyFrame &kTarget = *(ClosestKeyFrame(kSrc));   
@@ -471,7 +408,7 @@ void MapMaker::AddSomeMapPoints(int nLevel)
 };
 
 // Rotates/translates the whole map and all keyframes
-void MapMaker::ApplyGlobalTransformationToMap(SE3<> se3NewFromOld)
+void DenseMapMaker::ApplyGlobalTransformationToMap(SE3<> se3NewFromOld)
 {
   for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
     mMap.vpKeyFrames[i]->se3CfromW = mMap.vpKeyFrames[i]->se3CfromW * se3NewFromOld.inverse();
@@ -486,7 +423,7 @@ void MapMaker::ApplyGlobalTransformationToMap(SE3<> se3NewFromOld)
 }
 
 // Applies a global scale factor to the map
-void MapMaker::ApplyGlobalScaleToMap(double dScale)
+void DenseMapMaker::ApplyGlobalScaleToMap(double dScale)
 {
   for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
     mMap.vpKeyFrames[i]->se3CfromW.get_translation() *= dScale;
@@ -504,7 +441,7 @@ void MapMaker::ApplyGlobalScaleToMap(double dScale)
 // the tracker thread doesn't want to hang about, so 
 // just dumps it on the top of the mapmaker's queue to 
 // be dealt with later, and return.
-void MapMaker::AddKeyFrame(KeyFrame &k)
+void DenseMapMaker::AddKeyFrame(KeyFrame &k)
 {
   KeyFrame *pK = new KeyFrame;
   *pK = k;
@@ -515,7 +452,7 @@ void MapMaker::AddKeyFrame(KeyFrame &k)
 }
 
 // Mapmaker's code to handle incoming key-frames.
-void MapMaker::AddKeyFrameFromTopOfQueue()
+void DenseMapMaker::AddKeyFrameFromTopOfQueue()
 {
   if(mvpKeyFrameQueue.size() == 0)
     return;
@@ -529,7 +466,7 @@ void MapMaker::AddKeyFrameFromTopOfQueue()
       it!=pK->mMeasurements.end();
       it++)
     {
-      it->first->pMMData->sMeasurementKFs.insert(pK);
+      it->first->pDMMData->sMeasurementKFs.insert(pK);
       it->second.Source = Measurement::SRC_TRACKER;
     }
   
@@ -548,7 +485,7 @@ void MapMaker::AddKeyFrameFromTopOfQueue()
 // Tries to make a new map point out of a single candidate point
 // by searching for that point in another keyframe, and triangulating
 // if a match is found.
-bool MapMaker::AddPointEpipolar(KeyFrame &kSrc, 
+bool DenseMapMaker::AddPointEpipolar(KeyFrame &kSrc, 
 				KeyFrame &kTarget, 
 				int nLevel,
 				int nCandidate)
@@ -668,7 +605,7 @@ bool MapMaker::AddPointEpipolar(KeyFrame &kSrc,
   
   MapPoint *pNew = new MapPoint;
   pNew->v3WorldPos = v3New;
-  pNew->pMMData = new MapMakerData();
+  pNew->pDMMData = new DenseMapMakerData();
   
   // Patch source stuff:
   pNew->pPatchSourceKF = &kSrc;
@@ -697,16 +634,12 @@ bool MapMaker::AddPointEpipolar(KeyFrame &kSrc,
   m.Source = Measurement::SRC_EPIPOLAR;
   m.v2RootPos = Finder.GetSubPixPos();
   kTarget.mMeasurements[pNew] = m;
-  pNew->pMMData->sMeasurementKFs.insert(&kSrc);
-  pNew->pMMData->sMeasurementKFs.insert(&kTarget);
+  pNew->pDMMData->sMeasurementKFs.insert(&kSrc);
+  pNew->pDMMData->sMeasurementKFs.insert(&kTarget);
   return true;
 }
 
-/*
- * Linear distance of two cameras
- * O(1) time
- */
-double MapMaker::KeyFrameLinearDist(KeyFrame &k1, KeyFrame &k2)
+double DenseMapMaker::KeyFrameLinearDist(KeyFrame &k1, KeyFrame &k2)
 {
   Vector<3> v3KF1_CamPos = k1.se3CfromW.inverse().get_translation();
   Vector<3> v3KF2_CamPos = k2.se3CfromW.inverse().get_translation();
@@ -715,12 +648,7 @@ double MapMaker::KeyFrameLinearDist(KeyFrame &k1, KeyFrame &k2)
   return dDist;
 }
 
-/*
- * Find N closest keyframes w.r.t the current KeyFrame
- * O(n) time to prepare the candidites, O(nlogn) time to sort the first N frames?
- * O(n) time to prepare the result and return
- */
-vector<KeyFrame*> MapMaker::NClosestKeyFrames(KeyFrame &k, unsigned int N)
+vector<KeyFrame*> DenseMapMaker::NClosestKeyFrames(KeyFrame &k, unsigned int N)
 {
   vector<pair<double, KeyFrame* > > vKFandScores;
   for(unsigned int i=0; i<mMap.vpKeyFrames.size(); i++)
@@ -740,12 +668,7 @@ vector<KeyFrame*> MapMaker::NClosestKeyFrames(KeyFrame &k, unsigned int N)
   return vResult;
 }
 
-
-/*
- * Find the closest KeyFrame
- * O(n) time as we will iterate from first to last of the KeyFrame sequence
- */
-KeyFrame* MapMaker::ClosestKeyFrame(KeyFrame &k)
+KeyFrame* DenseMapMaker::ClosestKeyFrame(KeyFrame &k)
 {
   double dClosestDist = 9999999999.9;
   int nClosest = -1;
@@ -764,32 +687,26 @@ KeyFrame* MapMaker::ClosestKeyFrame(KeyFrame &k)
   return mMap.vpKeyFrames[nClosest];
 }
 
-/*
- * Find the distance to the nearest KeyFrame
- */
-double MapMaker::DistToNearestKeyFrame(KeyFrame &kCurrent)
+double DenseMapMaker::DistToNearestKeyFrame(KeyFrame &kCurrent)
 {
   KeyFrame *pClosest = ClosestKeyFrame(kCurrent);
   double dDist = KeyFrameLinearDist(kCurrent, *pClosest);
   return dDist;
 }
 
-/*
- * Whether we need a new KeyFrame
- */
-bool MapMaker::NeedNewKeyFrame(KeyFrame &kCurrent)
+bool DenseMapMaker::NeedNewKeyFrame(KeyFrame &kCurrent)
 {
   KeyFrame *pClosest = ClosestKeyFrame(kCurrent);
   double dDist = KeyFrameLinearDist(kCurrent, *pClosest);
   dDist *= (1.0 / kCurrent.dSceneDepthMean);
   
-  if(dDist > GV2.GetDouble("MapMaker.MaxKFDistWiggleMult",1.0,SILENT) * mdWiggleScaleDepthNormalized)
+  if(dDist > GV2.GetDouble("DenseMapMaker.MaxKFDistWiggleMult",1.0,SILENT) * mdWiggleScaleDepthNormalized)
     return true;
   return false;
 }
 
 // Perform bundle adjustment on all keyframes, all map points
-void MapMaker::BundleAdjustAll()
+void DenseMapMaker::BundleAdjustAll()
 {
   // construct the sets of kfs/points to be adjusted:
   // in this case, all of them
@@ -810,7 +727,7 @@ void MapMaker::BundleAdjustAll()
 
 // Peform a local bundle adjustment which only adjusts
 // recently added key-frames
-void MapMaker::BundleAdjustRecent()
+void DenseMapMaker::BundleAdjustRecent()
 {
   if(mMap.vpKeyFrames.size() < 8)  
     { // Ignore this unless map is big enough
@@ -860,7 +777,7 @@ void MapMaker::BundleAdjustRecent()
 }
 
 // Common bundle adjustment code. This creates a bundle-adjust instance, populates it, and runs it.
-void MapMaker::BundleAdjust(set<KeyFrame*> sAdjustSet, set<KeyFrame*> sFixedSet, set<MapPoint*> sMapPoints, bool bRecent)
+void DenseMapMaker::BundleAdjust(set<KeyFrame*> sAdjustSet, set<KeyFrame*> sFixedSet, set<MapPoint*> sMapPoints, bool bRecent)
 {
   Bundle b(mCamera);   // Our bundle adjuster
   mbBundleRunning = true;
@@ -921,7 +838,7 @@ void MapMaker::BundleAdjust(set<KeyFrame*> sAdjustSet, set<KeyFrame*> sFixedSet,
       // Crap: - LM Ran into a serious problem!
       // This is probably because the initial stereo was messed up.
       // Get rid of this map and start again! 
-      cout << "!! MapMaker: Cholesky failure in bundle adjust. " << endl
+      cout << "!! DenseMapMaker: Cholesky failure in bundle adjust. " << endl
 	   << "   The map is probably corrupt: Ditching the map. " << endl;
       mbResetRequested = true;
       return;
@@ -962,7 +879,7 @@ void MapMaker::BundleAdjust(set<KeyFrame*> sAdjustSet, set<KeyFrame*> sFixedSet,
       MapPoint *pp = mBundleID_Point[vOutliers_PC_pair[i].first];
       KeyFrame *pk = mBundleID_View[vOutliers_PC_pair[i].second];
       Measurement &m = pk->mMeasurements[pp];
-      if(pp->pMMData->GoodMeasCount() <= 2 || m.Source == Measurement::SRC_ROOT)   // Is the original source kf considered an outlier? That's bad.
+      if(pp->pDMMData->GoodMeasCount() <= 2 || m.Source == Measurement::SRC_ROOT)   // Is the original source kf considered an outlier? That's bad.
 	pp->bBad = true;
       else
 	{
@@ -970,9 +887,9 @@ void MapMaker::BundleAdjust(set<KeyFrame*> sAdjustSet, set<KeyFrame*> sFixedSet,
 	  if(m.Source == Measurement::SRC_TRACKER || m.Source == Measurement::SRC_EPIPOLAR)
 	    mvFailureQueue.push_back(pair<KeyFrame*,MapPoint*>(pk,pp));
 	  else
-	    pp->pMMData->sNeverRetryKFs.insert(pk);
+	    pp->pDMMData->sNeverRetryKFs.insert(pk);
 	  pk->mMeasurements.erase(pp);
-	  pp->pMMData->sMeasurementKFs.erase(pk);
+	  pp->pDMMData->sMeasurementKFs.erase(pk);
 	}
     }
 }
@@ -982,39 +899,39 @@ void MapMaker::BundleAdjust(set<KeyFrame*> sAdjustSet, set<KeyFrame*> sFixedSet,
 // was never searched for in a keyframe in the first place. This operates
 // much like the tracker! So most of the code looks just like in 
 // TrackerData.h.
-bool MapMaker::ReFind_Common(KeyFrame &k, MapPoint &p)
+bool DenseMapMaker::ReFind_Common(KeyFrame &k, MapPoint &p)
 {
   // abort if either a measurement is already in the map, or we've
   // decided that this point-kf combo is beyond redemption
-  if(p.pMMData->sMeasurementKFs.count(&k)
-     || p.pMMData->sNeverRetryKFs.count(&k))
+  if(p.pDMMData->sMeasurementKFs.count(&k)
+     || p.pDMMData->sNeverRetryKFs.count(&k))
     return false;
   
   static PatchFinder Finder;
   Vector<3> v3Cam = k.se3CfromW*p.v3WorldPos;
   if(v3Cam[2] < 0.001)
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
+      p.pDMMData->sNeverRetryKFs.insert(&k);
       return false;
     }
   Vector<2> v2ImPlane = project(v3Cam);
   if(v2ImPlane* v2ImPlane > mCamera.LargestRadiusInImage() * mCamera.LargestRadiusInImage())
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
+      p.pDMMData->sNeverRetryKFs.insert(&k);
       return false;
     }
   
   Vector<2> v2Image = mCamera.Project(v2ImPlane);
   if(mCamera.Invalid())
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
+      p.pDMMData->sNeverRetryKFs.insert(&k);
       return false;
     }
 
   ImageRef irImageSize = k.aLevels[0].im.size();
   if(v2Image[0] < 0 || v2Image[1] < 0 || v2Image[0] > irImageSize[0] || v2Image[1] > irImageSize[1])
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
+      p.pDMMData->sNeverRetryKFs.insert(&k);
       return false;
     }
   
@@ -1023,14 +940,14 @@ bool MapMaker::ReFind_Common(KeyFrame &k, MapPoint &p)
   
   if(Finder.TemplateBad())
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
+      p.pDMMData->sNeverRetryKFs.insert(&k);
       return false;
     }
   
   bool bFound = Finder.FindPatchCoarse(ir(v2Image), k, 4);  // Very tight search radius!
   if(!bFound)
     {
-      p.pMMData->sNeverRetryKFs.insert(&k);
+      p.pDMMData->sNeverRetryKFs.insert(&k);
       return false;
     }
   
@@ -1057,13 +974,13 @@ bool MapMaker::ReFind_Common(KeyFrame &k, MapPoint &p)
       assert(0); // This should never happen, we checked for this at the start.
     }
   k.mMeasurements[&p] = m;
-  p.pMMData->sMeasurementKFs.insert(&k);
+  p.pDMMData->sMeasurementKFs.insert(&k);
   return true;
 }
 
 // A general data-association update for a single keyframe
 // Do this on a new key-frame when it's passed in by the tracker
-int MapMaker::ReFindInSingleKeyFrame(KeyFrame &k)
+int DenseMapMaker::ReFindInSingleKeyFrame(KeyFrame &k)
 {
   vector<MapPoint*> vToFind;
   for(unsigned int i=0; i<mMap.vpPoints.size(); i++)
@@ -1080,7 +997,7 @@ int MapMaker::ReFindInSingleKeyFrame(KeyFrame &k)
 // When new map points are generated, they're only created from a stereo pair
 // this tries to make additional measurements in other KFs which they might
 // be in.
-void MapMaker::ReFindNewlyMade()
+void DenseMapMaker::ReFindNewlyMade()
 {
   if(mqNewQueue.empty())
     return;
@@ -1102,7 +1019,7 @@ void MapMaker::ReFindNewlyMade()
 };
 
 // Dud measurements get a second chance.
-void MapMaker::ReFindFromFailureQueue()
+void DenseMapMaker::ReFindFromFailureQueue()
 {
   if(mvFailureQueue.size() == 0)
     return;
@@ -1117,22 +1034,22 @@ void MapMaker::ReFindFromFailureQueue()
 };
 
 // Is the tracker's camera pose in cloud-cuckoo land?
-bool MapMaker::IsDistanceToNearestKeyFrameExcessive(KeyFrame &kCurrent)
+bool DenseMapMaker::IsDistanceToNearestKeyFrameExcessive(KeyFrame &kCurrent)
 {
   return DistToNearestKeyFrame(kCurrent) > mdWiggleScale * 10.0;
 }
 
 // Find a dominant plane in the map, find an SE3<> to put it as the z=0 plane
-SE3<> MapMaker::CalcPlaneAligner()
+SE3<> DenseMapMaker::CalcPlaneAligner()
 {
   unsigned int nPoints = mMap.vpPoints.size();
   if(nPoints < 10)
     {
-      cout << "  MapMaker: CalcPlane: too few points to calc plane." << endl;
+      cout << "  DenseMapMaker: CalcPlane: too few points to calc plane." << endl;
       return SE3<>();
     };
   
-  int nRansacs = GV2.GetInt("MapMaker.PlaneAlignerRansacs", 100, HIDDEN|SILENT);
+  int nRansacs = GV2.GetInt("DenseMapMaker.PlaneAlignerRansacs", 100, HIDDEN|SILENT);
   Vector<3> v3BestMean;
   Vector<3> v3BestNormal;
   double dBestDistSquared = 9999999999999999.9;
@@ -1230,7 +1147,7 @@ SE3<> MapMaker::CalcPlaneAligner()
 // Calculates the depth(z-) distribution of map points visible in a keyframe
 // This function is only used for the first two keyframes - all others
 // get this filled in by the tracker
-void MapMaker::RefreshSceneDepth(KeyFrame *pKF)
+void DenseMapMaker::RefreshSceneDepth(KeyFrame *pKF)
 {
   double dSumDepth = 0.0;
   double dSumDepthSquared = 0.0;
@@ -1249,19 +1166,19 @@ void MapMaker::RefreshSceneDepth(KeyFrame *pKF)
   pKF->dSceneDepthSigma = sqrt((dSumDepthSquared / nMeas) - (pKF->dSceneDepthMean) * (pKF->dSceneDepthMean));
 }
 
-void MapMaker::GUICommandCallBack(void* ptr, string sCommand, string sParams)
+void DenseMapMaker::GUICommandCallBack(void* ptr, string sCommand, string sParams)
 {
   Command c;
   c.sCommand = sCommand;
   c.sParams = sParams;
-  ((MapMaker*) ptr)->mvQueuedCommands.push_back(c);
+  ((DenseMapMaker*) ptr)->mvQueuedCommands.push_back(c);
 }
 
-void MapMaker::GUICommandHandler(string sCommand, string sParams)  // Called by the callback func..
+void DenseMapMaker::GUICommandHandler(string sCommand, string sParams)  // Called by the callback func..
 {
   if(sCommand=="SaveMap")
     {
-      cout << "  MapMaker: Saving the map.... " << endl;
+      cout << "  DenseMapMaker: Saving the map.... " << endl;
       ofstream ofs("map.dump");
       for(unsigned int i=0; i<mMap.vpPoints.size(); i++)
 	{
@@ -1287,7 +1204,7 @@ void MapMaker::GUICommandHandler(string sCommand, string sParams)  // Called by 
       return;
     }
   
-  cout << "! MapMaker::GUICommandHandler: unhandled command "<< sCommand << endl;
+  cout << "! DenseMapMaker::GUICommandHandler: unhandled command "<< sCommand << endl;
   exit(1);
 }; 
 

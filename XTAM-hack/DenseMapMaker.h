@@ -2,17 +2,20 @@
 // Copyright 2008 Isis Innovation Limited
 
 //
-// This header declares the MapMaker class
-// MapMaker makes and maintains the Map struct
+// This header declares the DenseMapMaker class
+// DenseMapMaker makes and maintains the Map struct
 // Starting with stereo initialisation from a bunch of matches
 // over keyframe insertion, continual bundle adjustment and 
 // data-association refinement.
-// MapMaker runs in its own thread, although some functions
+// DenseMapMaker runs in its own thread, although some functions
 // (notably stereo init) are called by the tracker and run in the 
 // tracker's thread.
 
-#ifndef __MAPMAKER_H
-#define __MAPMAKER_H
+#ifndef __DENSEMAPMAKER_H
+#define __DENSEMAPMAKER_H
+
+#include "GLWindow2.h"
+
 #include <cvd/image.h>
 #include <cvd/byte.h>
 #include <cvd/thread.h>
@@ -23,10 +26,10 @@
 #include <queue>
 
 
-// Each MapPoint has an associated MapMakerData class
+// Each MapPoint has an associated DenseMapMakerData class
 // Where the mapmaker can store extra information
  
-struct MapMakerData
+struct DenseMapMakerData
 {
   std::set<KeyFrame*> sMeasurementKFs;   // Which keyframes has this map point got measurements in?
 
@@ -36,12 +39,12 @@ struct MapMakerData
   {  return sMeasurementKFs.size(); }
 };
 
-// MapMaker dervives from CVD::Thread, so everything in void run() is its own thread.
-class MapMaker : protected CVD::Thread
+// DenseMapMaker dervives from CVD::Thread, so everything in void run() is its own thread.
+class DenseMapMaker : protected CVD::Thread
 {
 public:
-  MapMaker(Map &m, const ATANCamera &cam);
-  ~MapMaker();
+  DenseMapMaker(Map &m, const ATANCamera &cam);
+  ~DenseMapMaker();
   
   // Make a map from scratch. Called by the tracker.
   bool InitFromStereo(KeyFrame &kFirst, KeyFrame &kSecond, 
@@ -64,13 +67,12 @@ protected:
   
   Map &mMap;               // The map
   ATANCamera mCamera;      // Same as the tracker's camera: N.B. not a reference variable!
-  virtual void run_ptam();      // The MapMaker thread code lives here
-  virtual void run();      // The MapMaker thread code lives here
+  virtual void run();      // The DenseMapMaker thread code lives here
 
   // Functions for starting the map from scratch:
-  SE3<> CalcPlaneAligner(); // Dominant plane
+  SE3<> CalcPlaneAligner();
   void ApplyGlobalTransformationToMap(SE3<> se3NewFromOld);
-  void ApplyGlobalScaleToMap(double dScale); // Guess a scale?
+  void ApplyGlobalScaleToMap(double dScale);
   
   // Map expansion functions:
   void AddKeyFrameFromTopOfQueue();  
@@ -131,7 +133,8 @@ protected:
   bool mbBundleRunning;             // Bundle adjustment is running
   bool mbBundleRunningIsRecent;     //    ... and it's a local bundle adjustment.
 
-  
+private:
+  GLWindow2 mGLWindow;
 };
 
 #endif

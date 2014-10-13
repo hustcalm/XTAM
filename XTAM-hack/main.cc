@@ -11,16 +11,16 @@ using namespace GVars3;
 
 int main()
 {
-  cout << "  Welcome to PTAM " << endl;
+  cout << "  Welcome to XTAM " << endl;
   cout << "  --------------- " << endl;
-  cout << "  Parallel tracking and mapping for Small AR workspaces" << endl;
-  cout << "  Copyright (C) Isis Innovation Limited 2008 " << endl;  
+  cout << "  Based on Parallel tracking and mapping for Small AR workspaces" << endl;
+  cout << "  And Dense Tracking and Mapping" << endl;
+  cout << "  Copyleft (C) Lihang Li@NLPR 2014 " << endl;  
   cout << endl;
   cout << "  Parsing settings.cfg ...." << endl;
 
   // Note that GUI is a global object living in GVars3
-  // and comes to life once PTAM starts
-  // doing parser job in a dedicated thread
+  // and comes to life once PTAM starts doing parser job in a dedicated thread
   GUI.LoadFile("settings.cfg");
  
   // Start parsing of the console input

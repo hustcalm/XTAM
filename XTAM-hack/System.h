@@ -20,6 +20,7 @@
 class ATANCamera;
 class Map;
 class MapMaker;
+//class DenseMapMaker;
 class Tracker;
 class ARDriver;
 class MapViewer;
@@ -38,6 +39,7 @@ private:
   
   Map *mpMap; 
   MapMaker *mpMapMaker; 
+  //DenseMapMaker *mpDenseMapMaker; 
   Tracker *mpTracker; 
   ATANCamera *mpCamera;
   ARDriver *mpARDriver;

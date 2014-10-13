@@ -3,7 +3,7 @@
 
 # Edit the lines below to point to any needed include and link paths
 # Or to change the compiler's optimization flags
-CC = g++
+CC = g++ -ggdb
 COMPILEFLAGS = -I MY_CUSTOM_INCLUDE_PATH -D_LINUX -D_REENTRANT -Wall  -O3 -march=nocona -msse3
 # MY_CUSTOM_LINK_PATH = .
 # LINKFLAGS = -L MY_CUSTOM_LINK_PATH -lGVars3 -lcvd

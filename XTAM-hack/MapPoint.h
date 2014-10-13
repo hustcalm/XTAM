@@ -13,8 +13,10 @@
 
 #ifndef __MAP_POINT_H
 #define __MAP_POINT_H
+
 #include <TooN/TooN.h>
 using namespace TooN;
+
 #include <cvd/image_ref.h>
 #include <cvd/timer.h>
 #include <set>
@@ -22,6 +24,7 @@ using namespace TooN;
 class KeyFrame;
 class TrackerData;
 class MapMakerData;
+//class DenseMapMakerData;
 
 struct MapPoint
 {
@@ -41,7 +44,7 @@ struct MapPoint
   // Is it a dud? In that case it'll be moved to the trash soon.
   bool bBad;
   
-  // What pixels should be used to search for this point?
+  // What pixels should be used to search for this point? See paper Section 4
   KeyFrame *pPatchSourceKF; // The KeyFrame the point was originally made in
   int nSourceLevel;         // Pyramid level in source KeyFrame
   CVD::ImageRef irCenter;   // This is in level-coords in the source pyramid level
@@ -61,6 +64,9 @@ struct MapPoint
   
   // Info for the Mapmaker (not to be trashed by the tracker:)
   MapMakerData *pMMData;
+
+  // Info for the DenseMapmaker
+  //DenseMapMakerData *pDMMData;
   
   // Info for the Tracker (not to be trashed by the MapMaker:)
   TrackerData *pTData;

@@ -26,7 +26,7 @@ using namespace std;
 using namespace GVars3;
 
 // The constructor mostly sets up interal reference variables
-// to the other classes..
+// to the other classes(Map,MapMaker,Camera,etc)
 Tracker::Tracker(ImageRef irVideoSize, const ATANCamera &c, Map &m, MapMaker &mm) : 
   mMap(m),
   mMapMaker(mm),
@@ -38,7 +38,7 @@ Tracker::Tracker(ImageRef irVideoSize, const ATANCamera &c, Map &m, MapMaker &mm
   GUI.RegisterCommand("Reset", GUICommandCallBack, this);
   GUI.RegisterCommand("KeyPress", GUICommandCallBack, this);
   GUI.RegisterCommand("PokeTracker", GUICommandCallBack, this);
-  TrackerData::irImageSize = mirSize;
+  TrackerData::irImageSize = mirSize; // static member variable of TrackerData
 
   mpSBILastFrame = NULL;
   mpSBIThisFrame = NULL;
@@ -60,20 +60,20 @@ void Tracker::Reset()
   mCurrentKF.dSceneDepthMean = 1.0;
   mCurrentKF.dSceneDepthSigma = 1.0;
   mnInitialStage = TRAIL_TRACKING_NOT_STARTED;
-  mlTrails.clear();
+  mlTrails.clear(); // clear the trails for stereo initialization
   mCamera.SetImageSize(mirSize);
-  mCurrentKF.mMeasurements.clear();
-  mnLastKeyFrameDropped = -20;
-  mnFrame=0;
+  mCurrentKF.mMeasurements.clear(); // clear measurements of current KeyFrame
+  mnLastKeyFrameDropped = -20; // Why -20?
+  mnFrame = 0; // Frames since last KeyFrame
   mv6CameraVelocity = Zeros;
   mbJustRecoveredSoUseCoarse = false;
   
-  // Tell the MapMaker to reset itself.. 
+  // Tell the MapMaker to reset itself...
   // this may take some time, since the mapmaker thread may have to wait
   // for an abort-check during calculation, so sleep while waiting.
   // MapMaker will also clear the map.
-  mMapMaker.RequestReset();
-  while(!mMapMaker.ResetDone())
+  mMapMaker.RequestReset(); // request the MapMaker to reset
+  while(!mMapMaker.ResetDone()) // wait until MapMaker's reset is done
 #ifndef WIN32
 	  usleep(10);
 #else
@@ -81,12 +81,116 @@ void Tracker::Reset()
 #endif
 }
 
+void Tracker::TrackFrame(Image<byte> &imFrame, bool bDraw)
+{
+  //cout << "TrackFrame " << mnFrame << endl;
+
+  mbDraw = bDraw;
+  mMessageForUser.str("");   // Wipe the user message clean
+  
+  // Take the input video image, and convert it into the tracker's keyframe struct
+  // This does things like generate the image pyramid and find FAST corners
+  mCurrentKF.mMeasurements.clear();
+  mCurrentKF.MakeKeyFrame_Lite(imFrame);
+
+  // Update the small images for the rotation estimator
+  static gvar3<double> gvdSBIBlur("Tracker.RotationEstimatorBlur", 0.75, SILENT);
+  static gvar3<int> gvnUseSBI("Tracker.UseRotationEstimator", 1, SILENT);
+  mbUseSBIInit = *gvnUseSBI;
+  if(!mpSBIThisFrame)
+    {
+      mpSBIThisFrame = new SmallBlurryImage(mCurrentKF, *gvdSBIBlur);
+      mpSBILastFrame = new SmallBlurryImage(mCurrentKF, *gvdSBIBlur);
+    }
+  else
+    {
+      delete  mpSBILastFrame;
+      mpSBILastFrame = mpSBIThisFrame;
+      mpSBIThisFrame = new SmallBlurryImage(mCurrentKF, *gvdSBIBlur);
+    }
+  
+  // From now on we only use the keyframe struct!
+  mnFrame++;
+  
+  if(mbDraw)
+    {
+      glDrawPixels(mCurrentKF.aLevels[0].im);
+      if(GV2.GetInt("Tracker.DrawFASTCorners",0, SILENT))
+	{
+	  glColor3f(1,0,1);  glPointSize(1); 
+      glBegin(GL_POINTS);
+	  for(unsigned int i=0; i<mCurrentKF.aLevels[0].vCorners.size(); i++) 
+	    glVertex(mCurrentKF.aLevels[0].vCorners[i]);
+	  glEnd();
+	}
+    }
+  
+  // Decide what to do - if there is a map, try to track the map ...
+  if(mMap.IsGood())
+    {
+      if(mnLostFrames < 3)  // .. but only if we're not lost!
+	{
+	  if(mbUseSBIInit)
+	    CalcSBIRotation(); // frame-to-frame rotation estimation
+
+	  ApplyMotionModel();       // 
+	  TrackMap();               //  These three lines do the main tracking work.
+	  UpdateMotionModel();      // 
+	  
+	  AssessTrackingQuality();  //  Check if we're lost or if tracking is poor.
+	  
+	  { // Provide some feedback for the user:
+	    mMessageForUser << "Tracking Map, quality ";
+	    if(mTrackingQuality == GOOD)  mMessageForUser << "good.";
+	    if(mTrackingQuality == DODGY) mMessageForUser << "poor.";
+	    if(mTrackingQuality == BAD)   mMessageForUser << "bad.";
+	    mMessageForUser << " Found:";
+	    for(int i=0; i<LEVELS; i++) mMessageForUser << " " << manMeasFound[i] << "/" << manMeasAttempted[i];
+	    //	    mMessageForUser << " Found " << mnMeasFound << " of " << mnMeasAttempted <<". (";
+	    mMessageForUser << " Map: " << mMap.vpPoints.size() << "P, " << mMap.vpKeyFrames.size() << "KF";
+	  }
+	  
+	  // Heuristics to check if a key-frame should be added to the map:
+	  if(mTrackingQuality == GOOD &&
+	     mMapMaker.NeedNewKeyFrame(mCurrentKF) &&
+	     mnFrame - mnLastKeyFrameDropped > 20  &&
+	     mMapMaker.QueueSize() < 3)
+	    {
+	      mMessageForUser << " Adding key-frame.";
+	      AddNewKeyFrame();
+	    };
+	}
+      else  // what if there is a map, but tracking has been lost?
+	{
+	  mMessageForUser << "** Attempting recovery **.";
+	  if(AttemptRecovery())
+	    {
+	      TrackMap();
+	      AssessTrackingQuality();
+	    }
+	}
+      if(mbDraw)
+	RenderGrid();
+    } 
+  else // If there is no map, try to make one.
+    TrackForInitialMap(); 
+  
+  // GUI interface
+  while(!mvQueuedCommands.empty())
+    {
+      GUICommandHandler(mvQueuedCommands.begin()->sCommand, mvQueuedCommands.begin()->sParams);
+      mvQueuedCommands.erase(mvQueuedCommands.begin());
+    }
+}
+
 // TrackFrame is called by System.cc with each incoming video frame.
 // It figures out what state the tracker is in, and calls appropriate internal tracking
 // functions. bDraw tells the tracker wether it should output any GL graphics
 // or not (it should not draw, for example, when AR stuff is being shown.)
-void Tracker::TrackFrame(Image<byte> &imFrame, bool bDraw)
+void Tracker::TrackFrame_ptam(Image<byte> &imFrame, bool bDraw)
 {
+  //cout << "TrackFrame " << mnFrame << endl;
+
   mbDraw = bDraw;
   mMessageForUser.str("");   // Wipe the user message clean
   
@@ -236,12 +340,12 @@ void Tracker::RenderGrid()
     {
       glBegin(GL_LINE_STRIP);
       for(int j=0; j<nTot; j++)
-	glVertex(imVertices[i][j]);
+	    glVertex(imVertices[i][j]);
       glEnd();
       
       glBegin(GL_LINE_STRIP);
       for(int j=0; j<nTot; j++)
-	glVertex(imVertices[j][i]);
+	    glVertex(imVertices[j][i]);
       glEnd();
     };
   
@@ -304,6 +408,8 @@ void Tracker::GUICommandHandler(string sCommand, string sParams)  // Called by t
 // What action TrackForInitialMap() takes depends on the mnInitialStage enum variable..
 void Tracker::TrackForInitialMap()
 {
+  //cout << "Trying the standard point based stereo initialization..." << endl;
+
   // MiniPatch tracking threshhold.
   static gvar3<int> gvnMaxSSD("Tracker.MiniPatchMaxSSD", 100000, SILENT);
   MiniPatch::mnMaxSSD = *gvnMaxSSD;

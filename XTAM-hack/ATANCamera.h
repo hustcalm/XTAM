@@ -21,7 +21,7 @@
 // Pixel conventions are as follows:
 // For Project() and Unproject(),
 // round pixel values - i.e. (0.0, 0.0) - refer to pixel centers
-// I.e. the top left pixel in the image covers is centered on (0,0)
+// i.e. the top left pixel in the image covers is centered on (0,0)
 // and covers the area (-.5, -.5) to (.5, .5)
 //
 // Be aware that this is not the same as what opengl uses but makes sense
@@ -117,7 +117,7 @@ class ATANCamera {
   Vector<2> mvLastDistCam;  // Last distorted z=1 coord
   double mdLastR;           // Last z=1 radius
   double mdLastDistR;       // Last z=1 distorted radius
-  double mdLastFactor;      // Last ratio of z=1 radii
+  double mdLastFactor;      // Last ratio of z=1 radius
   bool mbInvalid;           // Was the last projection invalid?
   
   // Cached from last RefreshParams:
@@ -128,7 +128,7 @@ class ATANCamera {
   double mdOneOver2Tan;   // distortion model coeff
   double mdW;             // distortion model coeff
   double mdWinv;          // distortion model coeff
-  double mdDistortionEnabled; // One or zero depending on if distortion is on or off.
+  double mdDistortionEnabled; // One or zero depending on whether distortion is on or off.
   Vector<2> mvCenter;     // Pixel projection center
   Vector<2> mvFocal;      // Pixel focal length
   Vector<2> mvInvFocal;   // Inverse pixel focal length

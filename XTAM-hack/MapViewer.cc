@@ -51,7 +51,7 @@ void MapViewer::DrawGrid()
   
   glBegin(GL_LINES);
   
-  // Draw a larger grid around the outside..
+  // Draw a larger grid around the outside...
   double dGridInterval = 0.1;
   
   double dMin = -100.0 * dGridInterval;

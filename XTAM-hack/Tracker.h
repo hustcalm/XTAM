@@ -45,6 +45,9 @@ public:
   Tracker(CVD::ImageRef irVideoSize, const ATANCamera &c, Map &m, MapMaker &mm);
   
   // TrackFrame is the main working part of the tracker: call this every frame.
+  void TrackFrame_ptam(CVD::Image<CVD::byte> &imFrame, bool bDraw); 
+
+  // The new tracker of XTAM
   void TrackFrame(CVD::Image<CVD::byte> &imFrame, bool bDraw); 
 
   inline SE3<> GetCurrentPose() { return mse3CamFromWorld;}
@@ -121,6 +124,8 @@ protected:
   
   // User interaction for initial tracking:
   bool mbUserPressedSpacebar;
+
+  // User message using output stream class which operates on strings
   std::ostringstream mMessageForUser;
   
   // GUI interface:
