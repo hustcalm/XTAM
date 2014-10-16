@@ -17,10 +17,12 @@
 #include <cvd/rgb.h>
 #include <cvd/byte.h>
 
+#include <opencv/cv.h>
+
 class ATANCamera;
 class Map;
 class MapMaker;
-//class DenseMapMaker;
+class DenseMapMaker;
 class Tracker;
 class ARDriver;
 class MapViewer;
@@ -30,16 +32,18 @@ class System
 public:
   System();
   void Run();
+  void RunDTAM();
   
 private:
   VideoSource mVideoSource;
   GLWindow2 mGLWindow;
   CVD::Image<CVD::Rgb<CVD::byte> > mimFrameRGB;
   CVD::Image<CVD::byte> mimFrameBW;
+  cv::Mat mimFrame;
   
   Map *mpMap; 
   MapMaker *mpMapMaker; 
-  //DenseMapMaker *mpDenseMapMaker; 
+  DenseMapMaker *mpDenseMapMaker; 
   Tracker *mpTracker; 
   ATANCamera *mpCamera;
   ARDriver *mpARDriver;

@@ -16,6 +16,8 @@
 #include <cvd/byte.h>
 #include <cvd/rgb.h>
 
+#include <opencv/cv.h>
+
 struct VideoSourceData;
 
 class VideoSource
@@ -23,6 +25,7 @@ class VideoSource
  public:
   VideoSource();
   void GetAndFillFrameBWandRGB(CVD::Image<CVD::byte> &imBW, CVD::Image<CVD::Rgb<CVD::byte> > &imRGB);
+  void GetAndFillFrameBWandRGBDTAM(CVD::Image<CVD::byte> &imBW, CVD::Image<CVD::Rgb<CVD::byte> > &imRGB, cv::Mat &originalFrame);
   CVD::ImageRef Size();
   
  private:

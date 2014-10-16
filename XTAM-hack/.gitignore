@@ -18,3 +18,9 @@ PTAM
 
 # Tags
 tags
+
+# DataSets
+DTAM/Trajectory_30_seconds
+
+# Build
+DTAM/Cpp/Build

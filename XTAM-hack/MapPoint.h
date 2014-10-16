@@ -24,7 +24,7 @@ using namespace TooN;
 class KeyFrame;
 class TrackerData;
 class MapMakerData;
-//class DenseMapMakerData;
+class DenseMapMakerData;
 
 struct MapPoint
 {
@@ -66,7 +66,7 @@ struct MapPoint
   MapMakerData *pMMData;
 
   // Info for the DenseMapmaker
-  //DenseMapMakerData *pDMMData;
+  DenseMapMakerData *pDMMData;
   
   // Info for the Tracker (not to be trashed by the MapMaker:)
   TrackerData *pTData;

@@ -5,6 +5,9 @@
 #include <gvars3/instances.h>
 #include "System.h"
 
+#include <opencv2/core/core.hpp>
+#include "DTAM/Cpp/graphics.hpp"       
+#include <utils/ImplThreadLaunch.hpp>
 
 using namespace std;
 using namespace GVars3;
@@ -13,8 +16,8 @@ int main()
 {
   cout << "  Welcome to XTAM " << endl;
   cout << "  --------------- " << endl;
-  cout << "  Based on Parallel tracking and mapping for Small AR workspaces" << endl;
-  cout << "  And Dense Tracking and Mapping" << endl;
+  cout << "  Based on PTAM(Parallel tracking and mapping for Small AR workspaces)" << endl;
+  cout << "  And DTAM(Dense Tracking and Mapping in Real-Time)" << endl;
   cout << "  Copyleft (C) Lihang Li@NLPR 2014 " << endl;  
   cout << endl;
   cout << "  Parsing settings.cfg ...." << endl;
@@ -28,11 +31,17 @@ int main()
 
   // Call StopParserThread when PTAM terminates normally
   atexit(GUI.StopParserThread); 
+
+  // Stop All Threads related to DTAM when system terminates normally
+  atexit(ImplThread::stopAllThreads);
   
+  // Initial GUI
+  initGui();
+
   try
     {
       System s; // Construct the system using the default constructor
-      s.Run();  // Everything happens here
+      s.RunDTAM();  // Everything happens here
     }
   catch(CVD::Exceptions::All e)
     {

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include "ATANCamera.h"
 #include "MapMaker.h"
-//#include "DenseMapMaker.h"
+#include "DenseMapMaker.h"
 #include "Tracker.h"
 #include "ARDriver.h"
 #include "MapViewer.h"
@@ -13,6 +13,9 @@
 using namespace CVD;
 using namespace std;
 using namespace GVars3;
+
+#include <opencv2/core/core.hpp>
+#include "DTAM/Cpp/graphics.hpp"    
 
 
 /**
@@ -88,7 +91,8 @@ void System::Run()
       // and one RGB, for drawing.
 
       // Grab new video frame...
-      mVideoSource.GetAndFillFrameBWandRGB(mimFrameBW, mimFrameRGB);  
+      mVideoSource.GetAndFillFrameBWandRGBDTAM(mimFrameBW, mimFrameRGB, mimFrame);  
+
       static bool bFirstFrame = true;
       if(bFirstFrame)
 	  {
@@ -116,6 +120,76 @@ void System::Run()
       
       // Track the frame
       mpTracker->TrackFrame(mimFrameBW, !bDrawAR && !bDrawMap);
+      
+      // Draw map or AR on the window
+      if(bDrawMap)
+	      mpMapViewer->DrawMap(mpTracker->GetCurrentPose());
+      else if(bDrawAR)
+	      mpARDriver->Render(mimFrameRGB, mpTracker->GetCurrentPose());
+
+      // mGLWindow.GetMousePoseUpdate();
+      
+      // Draw caption
+      string sCaption;
+      if(bDrawMap)
+	      sCaption = mpMapViewer->GetMessageForUser();
+      else
+          sCaption = mpTracker->GetMessageForUser();
+
+      mGLWindow.DrawCaption(sCaption);
+      mGLWindow.DrawMenus();
+      mGLWindow.swap_buffers();
+      mGLWindow.HandlePendingEvents();
+    }
+}
+
+void System::RunDTAM()
+{
+  while(!mbDone)
+    {
+      
+      // We use two versions of each video frame:
+      // One black and white (for processing by the tracker etc)
+      // and one RGB, for drawing.
+
+      // Grab new video frame...
+      mVideoSource.GetAndFillFrameBWandRGBDTAM(mimFrameBW, mimFrameRGB, mimFrame);  
+      // Show original RGB Frame
+      pfShow("DTAM", mimFrame);
+
+      static bool bFirstFrame = true;
+      if(bFirstFrame)
+	  {
+          // First frame arrived, initialize the ARDriver
+          mpARDriver->Init();
+          bFirstFrame = false;
+	  }
+      
+      // As we invoke the blow 3 lines for every frame
+      // this should be related to each camera frame for display
+      mGLWindow.SetupViewport();
+      mGLWindow.SetupVideoOrtho();
+      mGLWindow.SetupVideoRasterPosAndZoom();
+      
+      // If the map is not good, then reset the ARDriver
+      if(!mpMap->IsGood())
+	      mpARDriver->Reset();
+      
+      static gvar3<int> gvnDrawMap("DrawMap", 0, HIDDEN|SILENT);
+      static gvar3<int> gvnDrawAR("DrawAR", 0, HIDDEN|SILENT);
+      
+      // Whether we will draw the map or draw the AR
+      bool bDrawMap = mpMap->IsGood() && *gvnDrawMap;
+      bool bDrawAR = mpMap->IsGood() && *gvnDrawAR;
+      
+      // Track the frame
+      mpTracker->TrackFrame(mimFrameBW, !bDrawAR && !bDrawMap);
+      SE3<> se3CamFromWorld;
+      cv::Mat R, T, cameraMatrix;
+      int layers=32;
+      int imagesPerCV=20;
+      //CostVolume cv(images[0], (FrameID)0, layers, 0.015, 0.0, Rs[0], Ts[0],cameraMatrix);
+      se3CamFromWorld = mpTracker->GetCurrentPose();
       
       // Draw map or AR on the window
       if(bDrawMap)
