@@ -67,12 +67,23 @@ int App_main( int argc, char** argv )
 
     for(int i=0;i<numImg;i++){
         Mat tmp;
+
+        /*
         sprintf(filename,"DTAM/Trajectory_30_seconds/scene_%03d.png",i);
         convertAhandaPovRayToStandard("DTAM/Trajectory_30_seconds",
                                       i,
                                       cameraMatrix,
                                       R,
                                       T);
+                                      */
+
+        sprintf(filename, "./imageSequences/image_%03d.png",i+1);
+        convertPTAMSequenceToStandard("./imageSequences",
+                                      i+1,
+                                      cameraMatrix,
+                                      R,
+                                      T);
+
         Mat image;
         cout<<"Opening: "<< filename << endl;
         
@@ -101,7 +112,8 @@ int App_main( int argc, char** argv )
                                                 0.0,0.0,0);
     int layers=32;
     int imagesPerCV=20;
-    CostVolume cv(images[0],(FrameID)0,layers,0.015,0.0,Rs[0],Ts[0],cameraMatrix);;
+    //CostVolume cv(images[0],(FrameID)0,layers,0.015,0.0,Rs[0],Ts[0],cameraMatrix);
+    CostVolume cv(images[0],(FrameID)0,layers,5,0.0,Rs[0],Ts[0],cameraMatrix);
 
 //     //New Way (Needs work)
 //     OpenDTAM odm(cameraMatrix);
@@ -120,6 +132,8 @@ int App_main( int argc, char** argv )
     cv::gpu::Stream s;
     
     for (int imageNum=1;imageNum<numImg;imageNum++){
+        cout << "Image Number: " << imageNum << endl;
+
         if (inc==-1 && imageNum<4){
             inc=1;
         }
@@ -163,7 +177,7 @@ int App_main( int argc, char** argv )
             
             
 
-            bool doneOptimizing; int Acount=0; int QDcount=0;
+            bool doneOptimizing = false; int Acount=0; int QDcount=0;
             do{
 //                 cout<<"Theta: "<< optimizer.getTheta()<<endl;
 //
@@ -229,7 +243,8 @@ int App_main( int argc, char** argv )
                 cout<<Rs0[i]<<Rs[i];
                 reprojectCloud(images[i],images[cv.fid],tracker.depth,RTToP(Rs[cv.fid],Ts[cv.fid]),RTToP(Rs[i],Ts[i]),cameraMatrix);
             }
-            cv=CostVolume(images[imageNum],(FrameID)imageNum,layers,0.015,0.0,Rs[imageNum],Ts[imageNum],cameraMatrix);
+            //cv=CostVolume(images[imageNum],(FrameID)imageNum,layers,0.015,0.0,Rs[imageNum],Ts[imageNum],cameraMatrix);
+            cv=CostVolume(images[imageNum],(FrameID)imageNum,layers,5,0.0,Rs[imageNum],Ts[imageNum],cameraMatrix);
             s=optimizer.cvStream;
 //             for (int imageNum=0;imageNum<numImg;imageNum=imageNum+1){
 //                 reprojectCloud(images[imageNum],images[0],optimizer.depthMap(),RTToP(Rs[0],Ts[0]),RTToP(Rs[imageNum],Ts[imageNum]),cameraMatrix);

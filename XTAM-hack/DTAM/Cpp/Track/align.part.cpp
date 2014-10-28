@@ -27,7 +27,7 @@
 // Model 1: Template(:)=Image(Warp(:)+dWarp(:))
 // Model 2: Template(dWarp_inv(:))=Image(Warp(:))
 //
-// nb: the "+" means composition, i.e. Warp(:)+dWarp(:)=dWarp(Warp)
+// nb: the "+" means composition, i.e. Warp(:)+dWarp(:)=dWarp(Warp) // See Lucas-Kanade algorithm, compositional algorithms
 //
 // 
 // J1=dI/dWarp*dWarp/dp=grad(I)(Warp)*dWarp/dp
@@ -101,6 +101,7 @@ static void createPyramids(const Mat& base,
     }
     
 }
+
 void Track::align(){
     align_gray(baseImage, depth, thisFrame);
 };
@@ -139,10 +140,10 @@ void Track::align_gray(Mat& _base, Mat& depth, Mat& _input){
                                                 depthPyr[level]*0.0,
                                                 inPyr[level],
                                                 cameraMatrixPyr[level],//Mat_<double>
-                                                p2d,                //Mat_<double>
+                                                p2d,                //Mat_<double>, pose of 2D without depth
                                                 CV_DTAM_FWD,
                                                 1,
-                                                3);
+                                                3); // 3 parameters for inter-frame rotation
 //             if(tocq()>.01)
 //                 break;
         }
@@ -158,7 +159,7 @@ void Track::align_gray(Mat& _base, Mat& depth, Mat& _input){
                                                             depthPyr[level],
                                                             inPyr[level],
                                                             cameraMatrixPyr[level],//Mat_<double>
-                                                            p,                //Mat_<double>
+                                                            p,                //Mat_<double>, pose of 3D
                                                             CV_DTAM_FWD,
                                                             thr,
                                                             6);

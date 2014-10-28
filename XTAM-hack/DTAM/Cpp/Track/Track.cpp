@@ -2,6 +2,7 @@
 #include "utils/utils.hpp"
 using namespace cv;
 using namespace std;
+
 Track::Track(Cost cost){
     rows=cost.rows;
     cols=cost.cols;
@@ -12,16 +13,18 @@ Track::Track(Cost cost){
     pose=basePose.clone();
 
 }
+
 Track::Track(CostVolume cost){
     rows=cost.rows;
     cols=cost.cols;
     cost.baseImage.download(thisFrame);
     baseImage=lastFrame=thisFrame;
     cameraMatrix=Mat(cost.cameraMatrix);
-    RTToLie(cost.R,cost.T,basePose);
+    RTToLie(cost.R, cost.T, basePose); // Reference pose
     pose=basePose.clone();
 
 }
+
 void Track::addFrame(cv::Mat frame){
     lastFrame=thisFrame;
     thisFrame=frame;

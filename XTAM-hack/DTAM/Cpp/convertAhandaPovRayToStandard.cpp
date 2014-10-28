@@ -129,3 +129,70 @@ void convertAhandaPovRayToStandard(const char * filepath,
 
 
 
+void convertPTAMSequenceToStandard(const char * filepath,
+                                   int imageNumber,
+                                   cv::Mat& cameraMatrix,
+                                   cv::Mat& R,
+                                   cv::Mat& T) {
+    char text_file_name[600];
+    sprintf(text_file_name, "%s/image_%03d.txt", filepath, imageNumber);
+
+    cout << "text_file_name = " << text_file_name << endl;
+
+    ifstream cam_pars_file(text_file_name);
+    if(!cam_pars_file.is_open())
+    {
+        cerr<<"Failed to open param file, check location of sample trajectory!"<<endl;
+        exit(1);
+    }
+
+    // Create Mat from the PTAM SE3<> Pose
+    R = Mat(3, 3, CV_64F);
+    T = Mat(3, 1, CV_64F);
+
+    char readlinedata[300];
+    int currentRow = 0;
+    double a, b, c, d;
+
+    while(1){
+        cam_pars_file.getline(readlinedata,300);
+        cout<<readlinedata<<endl;
+
+        if ( cam_pars_file.eof())
+            break;
+
+        istringstream iss;
+
+        string cam_dir_str(readlinedata);
+
+        iss.str(cam_dir_str);
+        iss >> a;
+        iss.ignore(1,' ');
+        iss >> b;
+        iss.ignore(1,' ') ;
+        iss >> c;
+        iss.ignore(1,' ');
+        iss >> d;
+
+        R.at<double>(currentRow, 0) = a;
+        R.at<double>(currentRow, 1) = b;
+        R.at<double>(currentRow, 2) = c;
+        T.at<double>(currentRow, 0) = d;
+
+        currentRow++;
+    } 
+    cam_pars_file.close();
+
+    // Camear Intrinsic parameters
+    double mvImageSize_0 = 640.0;
+    double mvImageSize_1 = 480.0;
+    double mgvvCameraParams[4] = {0.845999,1.12317,0.511039,0.458354};
+    double mvFocal_0 = mvImageSize_0 * (mgvvCameraParams)[0];
+    double mvFocal_1 = mvImageSize_1 * (mgvvCameraParams)[1];
+    double mvCenter_0 = mvImageSize_0 * (mgvvCameraParams)[2] - 0.5;
+    double mvCenter_1 = mvImageSize_1 * (mgvvCameraParams)[3] - 0.5;
+
+    cameraMatrix=(Mat_<double>(3,3) << mvFocal_0,0.0,mvCenter_0,
+                                       0.0,mvFocal_1,mvCenter_1,
+                                       0.0,0.0,1.0);
+}

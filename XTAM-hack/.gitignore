@@ -21,6 +21,7 @@ tags
 
 # DataSets
 DTAM/Trajectory_30_seconds
+imageSequences
 
 # Build
 DTAM/Cpp/Build

@@ -34,6 +34,7 @@ Tracker::Tracker(ImageRef irVideoSize, const ATANCamera &c, Map &m, MapMaker &mm
   mRelocaliser(mMap, mCamera),
   mirSize(irVideoSize)
 {
+  initialDone = false;
   mCurrentKF.bFixed = false;
   GUI.RegisterCommand("Reset", GUICommandCallBack, this);
   GUI.RegisterCommand("KeyPress", GUICommandCallBack, this);
@@ -447,6 +448,7 @@ void Tracker::TrackForInitialMap()
 							i->irCurrentPos));
 	  mMapMaker.InitFromStereo(mFirstKF, mCurrentKF, vMatches, mse3CamFromWorld);  // This will take some time!
 	  mnInitialStage = TRAIL_TRACKING_COMPLETE;
+      initialDone = true;
 	}
       else
 	mMessageForUser << "Translate the camera slowly sideways, and press spacebar again to perform stereo init." << endl;

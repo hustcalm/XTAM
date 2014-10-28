@@ -13,11 +13,11 @@ public:
     int rows;
     int cols;
     cv::Mat dMdp;
-    cv::Mat gradBase;
-    cv::Mat baseImage;
-    cv::Mat basePose;
-    cv::Mat depth;
-    cv::Mat pose;
+    cv::Mat gradBase;  // Gradient of Reference Image
+    cv::Mat baseImage; // Reference Image
+    cv::Mat basePose;  // Pose of Reference Image
+    cv::Mat depth;     // The depth map
+    cv::Mat pose;      // The pose
     cv::Mat thisFrame;
     cv::Mat lastFrame;
     

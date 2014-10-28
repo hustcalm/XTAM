@@ -54,6 +54,8 @@ public:
   
   // Gets messages to be printed on-screen for the user.
   std::string GetMessageForUser();
+
+  inline bool isInitialDone() { return initialDone;}
   
 protected:
   KeyFrame mCurrentKF;            // The current working frame as a keyframe struct
@@ -74,6 +76,7 @@ protected:
   enum {TRAIL_TRACKING_NOT_STARTED, 
 	TRAIL_TRACKING_STARTED, 
 	TRAIL_TRACKING_COMPLETE} mnInitialStage;  // How far are we towards making the initial map?
+  bool initialDone;
   void TrailTracking_Start();     // First frame of initial trail tracking. Called by TrackForInitialMap.
   int  TrailTracking_Advance();   // Steady-state of initial trail tracking. Called by TrackForInitialMap.
   std::list<Trail> mlTrails;      // Used by trail tracking

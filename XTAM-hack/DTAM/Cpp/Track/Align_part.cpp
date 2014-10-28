@@ -199,7 +199,7 @@ bool Track::align_level_largedef_gray_forward(const Mat& T,//Total Mem cost ~185
         mixChannels(src,1,dst,2,from_to,3);// extract the image and the resampled gradient //(Mem cost: min 3 load, 3 store :6)
         
         
-        if(cv::countNonZero(I)<rows*cols*FAIL_FRACTION){//tracking failed!
+        if(cv::countNonZero(I) < rows*cols*FAIL_FRACTION){ //tracking failed!
             return false;
         }
         
@@ -302,7 +302,7 @@ bool Track::align_level_largedef_gray_forward(const Mat& T,//Total Mem cost ~185
     Hinv.convertTo(Hinv,CV_32FC1);
     err=err.reshape(0,r*c);
 
-    Mat dp=(Hinv*(Jsmall*err)).t();//transpose because we decided that p is row vector (Mem cost 7)
+    Mat dp=(Hinv*(Jsmall*err)).t(); //transpose because we decided that p is row vector (Mem cost 7)
     dp.convertTo(dp,CV_64FC1);
 //     cout<<"Je: \n"<<Jsmall*err<<endl;
 //     cout<<"H: "<<"\n"<< Hss<< endl;
@@ -333,6 +333,6 @@ bool Track::align_level_largedef_gray_forward(const Mat& T,//Total Mem cost ~185
 //         if (deltaErr<0)
 //             return false;
 //     }
-    _p.colRange(0,numParams)+=dp;
+    _p.colRange(0,numParams) += dp;
     return true;
 }

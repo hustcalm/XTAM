@@ -8,4 +8,10 @@ void convertAhandaPovRayToStandard(const char * filepath,
                                    cv::Mat& R,
                                    cv::Mat& T);
 
+void convertPTAMSequenceToStandard(const char * filepath,
+                                   int imageNumber,
+                                   cv::Mat& cameraMatrix,
+                                   cv::Mat& R,
+                                   cv::Mat& T);
+
 #endif // CONVERTAHANDAPOVRAYTOSTANDARD_H_INCLUDED
