@@ -1,7 +1,7 @@
 #ifndef TRACK_HPP
 #define TRACK_HPP
 #include <opencv2/opencv.hpp>
-#include <CostVolume/Cost.h>
+#include <CostVolume/Cost.hpp>
 #include <CostVolume/CostVolume.hpp>
 #include <DepthmapDenoiseWeightedHuber/DepthmapDenoiseWeightedHuber.hpp>
 
@@ -30,11 +30,11 @@ public:
 private:
     //Alignment Functions
     
-    //Large deformation, forward mapping, 6DoF
+    // Large deformation, forward mapping, 6DoF
     bool align_level_largedef_gray_forward(const cv::Mat& T,
                                            const cv::Mat& d,
                                            const cv::Mat& _I,
-                                           const cv::Mat& cameraMatrix,//Mat_<double>
+                                           const cv::Mat& cameraMatrix,      //Mat_<double>
                                            const cv::Mat& _p,                //Mat_<double>
                                            int mode,
                                            float threshold,

@@ -78,6 +78,18 @@ X_DTAM_OBJECTS= $(DTAM_SRC)/testprog.o\
 			  $(DTAM_SRC)/CostVolume/utils/reproject.o\
 			  $(DTAM_SRC)/CostVolume/utils/reprojectCloud.o
 
+X_DTAM_CPU_OBJECTS= $(DTAM_SRC)/testprog_CPU.o\
+			  $(DTAM_SRC)/Scheduler/ImplMutex.o\
+			  $(DTAM_SRC)/graphics.o\
+			  $(DTAM_SRC)/utils/ImplThreadLaunch.o\
+			  $(DTAM_SRC)/CostVolume/Cost.o\
+			  $(DTAM_SRC)/CostVolume/optimizer.part.o\
+			  $(DTAM_SRC)/Track/Track.o\
+			  $(DTAM_SRC)/Track/align.part.o\
+			  $(DTAM_SRC)/convertAhandaPovRayToStandard.o\
+			  $(DTAM_SRC)/CostVolume/utils/reproject.o\
+			  $(DTAM_SRC)/CostVolume/utils/reprojectCloud.o
+
 DTAM_CUDA_SRC = DTAM/Cpp
 DTAM_CUDA_OBJECTS= $(DTAM_CUDA_SRC)/CostVolume/CostVolume_cu.o\
 				   $(DTAM_CUDA_SRC)/DepthmapDenoiseWeightedHuber/DepthmapDenoiseWeightedHuber_cu.o\
@@ -91,13 +103,16 @@ CALIB_OBJECTS=	GLWindow2.o\
 		ATANCamera.o \
 		CameraCalibrator.o
 
-All: X_DTAM PTAM CameraCalibrator
+All: X_DTAM X_DTAM_CPU PTAM CameraCalibrator
 
 PTAM: $(OBJECTS) $(DTAM_OBJECTS) $(DTAM_CUDA_OBJECTS)
 	$(CC) -o PTAM $(OBJECTS) $(DTAM_OBJECTS) $(DTAM_CUDA_OBJECTS) $(LINKFLAGS) $(DTAM_LINKFLAGS) $(DTAM_CUDA_LINKFLAGS)
 
 X_DTAM: $(X_DTAM_OBJECTS) $(DTAM_CUDA_OBJECTS)
 	$(CXX) -o X_DTAM $(DTAM_CUDA_OBJECTS) $(X_DTAM_OBJECTS) $(DTAM_LINKFLAGS) $(DTAM_CUDA_LINKFLAGS)
+
+X_DTAM_CPU: $(X_DTAM_CPU_OBJECTS)
+	$(CXX) -o X_DTAM_CPU $(X_DTAM_CPU_OBJECTS) $(DTAM_LINKFLAGS)
 
 CameraCalibrator:$(CALIB_OBJECTS)
 	$(CC) -o CameraCalibrator $(CALIB_OBJECTS) $(LINKFLAGS) $(DTAM_LINKFLAGS)

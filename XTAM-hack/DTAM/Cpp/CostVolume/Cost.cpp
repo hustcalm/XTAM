@@ -1,4 +1,4 @@
-#include "Cost.h"
+#include "Cost.hpp"
 
 #define COST_CPP_SUBPARTS
 #include "updateCost.part.cpp"
@@ -6,7 +6,7 @@
 #undef COST_CPP_SUBPARTS
 #include "updateCost.part.hpp"
 #define COST_CPP_DATA_MIN 3
-#define COST_CPP_INITIAL_WEIGHT .001
+#define COST_CPP_INITIAL_WEIGHT 0.001
 
 
 Cost::Cost(const cv::Mat& baseImage, int layers, const cv::Mat& cameraMatrix, const cv::Mat& R, const cv::Mat& Tr):
@@ -16,11 +16,11 @@ cols(baseImage.cols),
 layers(layers),
 depth(generateDepths(layers)),
 cameraMatrix(cameraMatrix),
-pose(convertPose(R,Tr)),
-lo(cv::Mat(baseImage.rows,baseImage.cols,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
-hi(cv::Mat(baseImage.rows,baseImage.cols,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
-dataContainer(cv::Mat(baseImage.rows*baseImage.cols*layers,1,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),//allocate enough data to hold all of the cost volume
-hitContainer(cv::Mat(baseImage.rows*baseImage.cols*layers,1,cv::DataType<float>::type, cv::Scalar(COST_CPP_INITIAL_WEIGHT)))//allocate enough data to hold all of the hits info in cost volume
+basePose(convertPose(R,Tr)),
+lo(cv::Mat(baseImage.rows, baseImage.cols, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
+hi(cv::Mat(baseImage.rows, baseImage.cols, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
+dataContainer(cv::Mat(baseImage.rows*baseImage.cols*layers, 1, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))), // Allocate enough data to hold all of the cost volume, M*N*S, but use stacked rasterised column vector
+hitContainer(cv::Mat(baseImage.rows*baseImage.cols*layers, 1, cv::DataType<float>::type, cv::Scalar(COST_CPP_INITIAL_WEIGHT))) // Allocate enough data to hold all of the hits info in cost volume, M*N*S, but use stacked rasterised column vector
 {
     init();
 }
@@ -33,11 +33,11 @@ cols(baseImage.cols),
 layers(layers),
 depth(generateDepths(layers)),
 cameraMatrix(cameraMatrix),
-pose(cameraPose),
-dataContainer(cv::Mat(baseImage.rows*baseImage.cols*layers,1,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),//allocate enough data to hold all of the cost volume
-hitContainer(cv::Mat(baseImage.rows*baseImage.cols*layers,1,cv::DataType<float>::type, cv::Scalar(COST_CPP_INITIAL_WEIGHT))),//allocate enough data to hold all of the hits info in cost volume
-lo(cv::Mat(baseImage.rows,baseImage.cols,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
-hi(cv::Mat(baseImage.rows,baseImage.cols,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN)))
+basePose(cameraPose),
+dataContainer(cv::Mat(baseImage.rows*baseImage.cols*layers, 1, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))), // Allocate enough data to hold all of the cost volume
+hitContainer(cv::Mat(baseImage.rows*baseImage.cols*layers, 1, cv::DataType<float>::type, cv::Scalar(COST_CPP_INITIAL_WEIGHT))), // Allocate enough data to hold all of the hits info in cost volume
+lo(cv::Mat(baseImage.rows, baseImage.cols, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
+hi(cv::Mat(baseImage.rows, baseImage.cols, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN)))
 {
     init();
 }
@@ -50,11 +50,11 @@ cols(baseImage.cols),
 depth(depth),
 layers(depth.size()),
 cameraMatrix(cameraMatrix),
-pose(convertPose(R,Tr)),
-dataContainer(cv::Mat(baseImage.rows*baseImage.cols*depth.size(),1,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),//allocate enough data to hold all of the cost volume
-hitContainer(cv::Mat(baseImage.rows*baseImage.cols*depth.size(),1,cv::DataType<float>::type, cv::Scalar(COST_CPP_INITIAL_WEIGHT))),//allocate enough data to hold all of the hits info in cost volume
-lo(cv::Mat(baseImage.rows,baseImage.cols,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
-hi(cv::Mat(baseImage.rows,baseImage.cols,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN)))
+basePose(convertPose(R,Tr)),
+dataContainer(cv::Mat(baseImage.rows*baseImage.cols*depth.size(), 1, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))), // Allocate enough data to hold all of the cost volume
+hitContainer(cv::Mat(baseImage.rows*baseImage.cols*depth.size(), 1, cv::DataType<float>::type, cv::Scalar(COST_CPP_INITIAL_WEIGHT))), // Allocate enough data to hold all of the hits info in cost volume
+lo(cv::Mat(baseImage.rows, baseImage.cols, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
+hi(cv::Mat(baseImage.rows, baseImage.cols, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN)))
 {
     init();
 }
@@ -67,17 +67,17 @@ cols(baseImage.cols),
 layers(depth.size()),
 depth(depth),
 cameraMatrix(cameraMatrix),
-pose(cameraPose),
-dataContainer(cv::Mat(baseImage.rows*baseImage.cols*depth.size(),1,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),//allocate enough data to hold all of the cost volume
-hitContainer(cv::Mat(baseImage.rows*baseImage.cols*depth.size(),1,cv::DataType<float>::type, cv::Scalar(COST_CPP_INITIAL_WEIGHT))),//allocate enough data to hold all of the hits info in cost volume
-lo(cv::Mat(baseImage.rows,baseImage.cols,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
-hi(cv::Mat(baseImage.rows,baseImage.cols,cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN)))
+basePose(cameraPose),
+dataContainer(cv::Mat(baseImage.rows*baseImage.cols*depth.size(), 1, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))), // Allocate enough data to hold all of the cost volume
+hitContainer(cv::Mat(baseImage.rows*baseImage.cols*depth.size(), 1, cv::DataType<float>::type, cv::Scalar(COST_CPP_INITIAL_WEIGHT))), // Allocate enough data to hold all of the hits info in cost volume
+lo(cv::Mat(baseImage.rows, baseImage.cols, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN))),
+hi(cv::Mat(baseImage.rows, baseImage.cols, cv::DataType<float>::type, cv::Scalar(COST_CPP_DATA_MIN)))
 {
     init();
 }
 
 const cv::Mat Cost::depthMap(){
-    //Returns the best available depth map
+    // Returns the best available depth map
     // Code should not rely on the particular mapping of true 
     // internal data to true inverse depth, as this may change.
     // Currently depth is just a constant multiple of the index, so
@@ -87,5 +87,3 @@ const cv::Mat Cost::depthMap(){
     }
     return _a*depthStep;
 }
-
-

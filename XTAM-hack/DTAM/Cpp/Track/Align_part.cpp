@@ -20,13 +20,10 @@ using namespace std;
 
 const static float FAIL_FRACTION=0.30;
 
-enum alignment_modes{CV_DTAM_REV,CV_DTAM_FWD,CV_DTAM_ESM};
-const double small0=.1;//~6deg, not trivial, but hopefully enough to make the translation matter
+enum alignment_modes{CV_DTAM_REV, CV_DTAM_FWD, CV_DTAM_ESM};
+const double small0 = .1; // ~6deg, not trivial, but hopefully enough to make the translation matter
 
 static void getGradient(const Mat& image,Mat & grad);
-
-
-
 
 //Mat& reprojectWithDepth(const Mat& T,
 //                        const Mat& d,
@@ -37,58 +34,63 @@ static void getGradient(const Mat& image,Mat & grad);
 //
 //}
 
-static Mat paramsToProjection(const Mat & p,const Mat& _cameraMatrix){
+static Mat paramsToProjection(const Mat& p, const Mat& _cameraMatrix) {
     //Build the base transform
-    assert(p.type()==CV_64FC1);
-    Mat dR=rodrigues(p.colRange(Range(0,3)));
-    Mat dT=p.colRange(Range(3,6)).t();
+    assert(p.type() == CV_64FC1);
+    Mat dR = rodrigues(p.colRange(Range(0,3)));
+    Mat dT = p.colRange(Range(3,6)).t();
     Mat dA;
-    hconcat(dR,dT,dA);
-    dA=make4x4(dA);
-    Mat cameraMatrix=make4x4(_cameraMatrix);
-    assert(cameraMatrix.type()==CV_64FC1);
-    Mat proj=cameraMatrix*dA*cameraMatrix.inv();
+    hconcat(dR, dT, dA);
+    dA = make4x4(dA);
+    Mat cameraMatrix = make4x4(_cameraMatrix);
+    assert(cameraMatrix.type() == CV_64FC1);
+    Mat proj = cameraMatrix*dA*cameraMatrix.inv();
+    
 //     cout<<"p: "<<"\n"<< p<< endl;
 //     cout<<"Proj: "<<"\n"<< proj<< endl;
+
     //The column swap
-    Mat tmp=proj.colRange(2,4).clone();
+    Mat tmp = proj.colRange(2,4).clone();
     tmp.col(1).copyTo(proj.col(2));
     tmp.col(0).copyTo(proj.col(3));
     //The row drop
-    proj=proj.rowRange(0,3);
+    proj = proj.rowRange(0,3);
+
     return proj;
 }
 
 static Mat&  makeGray(Mat& image){
-    if (image.channels()!=1) {
+    if (image.channels() != 1) {
         cvtColor(image, image, CV_BGR2GRAY);
     }
     return image;
 }
 
-static void getGradient(const Mat& image,Mat & grad){
-    //Image gradients for alignment
-    //Note that these gradients have theoretical problems under the sudden 
+static void getGradient(const Mat& image, Mat & grad){
+    // Image gradients for alignment
+    // Note that these gradients have theoretical problems under the sudden 
     // changes model of images. It might be wise to blur the images before 
     // alignment, to avoid sudden changes, but that makes occlusion more 
     // problematic.
-    grad.create(2,image.rows*image.cols,CV_32FC1);
+    grad.create(2, image.rows*image.cols, CV_32FC1);
     Mat gray;
-    if (image.type()==CV_32FC1) {
-        gray=image;
+
+    if (image.type() == CV_32FC1) {
+        gray = image;
     }else {
         cvtColor(image, gray, CV_BGR2GRAY);
         gray.convertTo(gray,CV_32FC1);
     }
+
     Mat grad_x(image.rows,image.cols,CV_32FC1,grad.row(0).data);
     Scharr( gray, grad_x, CV_32FC1, 1, 0, 1.0/26.0, 0, BORDER_REPLICATE );
     Mat grad_y(image.rows,image.cols,CV_32FC1,grad.row(1).data);
     Scharr( gray, grad_y, CV_32FC1, 0, 1, 1.0/26.0, 0, BORDER_REPLICATE);
 }
 
-static void getGradient_8(const Mat& image,Mat & grad){
-    //Image gradients for alignment
-    //Note that these gradients have theoretical problems under the sudden 
+static void getGradient_8(const Mat& image, Mat& grad){
+    // Image gradients for alignment
+    // Note that these gradients have theoretical problems under the sudden 
     // changes model of images. It might be wise to blur the images before 
     // alignment, to avoid sudden changes, but that makes occlusion more 
     // problematic.
@@ -107,8 +109,8 @@ static void getGradient_8(const Mat& image,Mat & grad){
 }
 
 static void getGradientInterleave(const Mat& image,Mat & grad){
-    //Image gradients for alignment
-    //Note that these gradients have theoretical problems under the sudden 
+    // Image gradients for alignment
+    // Note that these gradients have theoretical problems under the sudden 
     // changes model of images. It might be wise to blur the images before 
     // alignment, to avoid sudden changes, but that makes occlusion more 
     // problematic.
@@ -124,21 +126,21 @@ static void getGradientInterleave(const Mat& image,Mat & grad){
     Scharr( gray, gradX, CV_32FC1, 1, 0, 1.0/26.0, 0, BORDER_REPLICATE );
     Mat gradY(image.rows,image.cols,CV_32FC1);
     Scharr( gray, gradY, CV_32FC1, 0, 1, 1.0/26.0, 0, BORDER_REPLICATE);
-    Mat src [2]={gradY,gradX};
-    merge(src,2,grad);
+    Mat src [2]={gradY, gradX};
+    merge(src, 2, grad);
 }
 
 static void Mask(const Mat& in,const Mat& m,Mat& out){
     Mat tmp;
     
-    m.convertTo(tmp,in.type());
-    out=out.mul(tmp/255);
+    m.convertTo(tmp, in.type());
+    out = out.mul(tmp/255);
 }
 
-bool Track::align_level_largedef_gray_forward(const Mat& T,//Total Mem cost ~185 load/stores of image
+bool Track::align_level_largedef_gray_forward(const Mat& T, //Total Mem cost ~185 load/stores of image
                           const Mat& d,
                           const Mat& _I,
-                          const Mat& cameraMatrix,//Mat_<double>
+                          const Mat& cameraMatrix,      //Mat_<double>
                           const Mat& _p,                //Mat_<double>
                           int mode,
                           float threshold,
@@ -146,36 +148,36 @@ bool Track::align_level_largedef_gray_forward(const Mat& T,//Total Mem cost ~185
                                       )
 {
 
-    int r=_I.rows;
-    int rows=r;
-    int c=_I.cols;
-    int cols=c;
-    const float small=small0;
-    //Build the in map (Mem cost 3 layer store:3)
+    int r = _I.rows;
+    int rows = r;
+    int c = _I.cols;
+    int cols = c;
+    const float small = small0;
+
+    // Build the in map (Mem cost 3 layer store:3)
     Mat_<Vec3f> idMap3;
     {
-        idMap3.create(r,c);//[rows][cols][3]
-        float* id3=(float*) (idMap3.data);
-        float* dp=(float*) (d.data);
-        int offset=0;
-        for(int i=0;i<r;i++){
-            for(int j=0;j<c;j++,offset++){
-                id3[offset*3+0]=j;
-                id3[offset*3+1]=i;
-                id3[offset*3+2]=dp[offset];
+        idMap3.create(r, c); //[rows][cols][3]
+        float* id3 = (float*)(idMap3.data);
+        float* dp = (float*)(d.data);
+        int offset = 0;
+        for(int i = 0;i < r; i++){
+            for(int j = 0; j < c; j++, offset++){
+                id3[offset*3 + 0] = j;
+                id3[offset*3 + 1] = i;
+                id3[offset*3+2] = dp[offset];
             }
         }
     }
     
     //Build the unincremented transform: (Mem cost 2 layer store,3 load :5)
-    Mat baseMap(rows,cols,CV_32FC2);
+    Mat baseMap(rows, cols, CV_32FC2);
     {
-        Mat tmp=_p.clone();
-        Mat baseProj=paramsToProjection(_p,cameraMatrix);
+        Mat tmp = _p.clone();
+        Mat baseProj = paramsToProjection(_p,cameraMatrix);
         perspectiveTransform(idMap3,baseMap,baseProj);
-        assert(baseMap.type()==CV_32FC2);
+        assert(baseMap.type() == CV_32FC2);
     }
-    
     
     // reproject the gradient and image at the same time (Mem cost >= 24)
     Mat gradI;
@@ -228,9 +230,6 @@ bool Track::align_level_largedef_gray_forward(const Mat& T,//Total Mem cost ~185
 //     }
     
    
-    
-    
-    
     // Build Jacobians:
     Mat Jsmall;
     Jsmall.create(numParams,rows*cols,CV_32FC1);
@@ -240,8 +239,6 @@ bool Track::align_level_largedef_gray_forward(const Mat& T,//Total Mem cost ~185
     
     //TODO: Whole loop cacheable except J multiplies if CV_DTAM_REV (Mem cost whole loop 17/itr: 102)
     for (int paramNum=0; paramNum<numParams; paramNum++) {
-        
-        
         
         //Build the incremented transform
         assert(_p.type()==CV_64FC1);

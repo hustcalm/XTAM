@@ -1,31 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /*//the complex internals of the iterate function
 iteratorCore(D, Q, A, C, G, sigma_q, sigma_d, theta){
 	//lowercase lettes are elements of uppercase letters at a given column

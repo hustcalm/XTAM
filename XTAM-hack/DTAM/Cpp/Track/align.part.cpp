@@ -108,78 +108,64 @@ void Track::align(){
 
 void Track::align_gray(Mat& _base, Mat& depth, Mat& _input){
     Mat input,base,lastFrameGray;
-    input=makeGray(_input);
-    base=makeGray(_base);
-    lastFrameGray=makeGray(lastFrame)  ;
+    input = makeGray(_input);
+    base = makeGray(_base);
+    lastFrameGray = makeGray(lastFrame)  ;
     
     tic();
-    int levels=6; // 6 levels on a 640x480 image is 20x15
-    int startlevel=0;
-    int endlevel=6;
+    int levels = 6; // 6 levels on a 640x480 image is 20x15
+    int startlevel = 0;
+    int endlevel = 6;
 
-    Mat p=LieSub(pose,basePose);// the Lie parameters 
+    Mat p = LieSub(pose, basePose); // the Lie parameters 
     cout<<"pose: "<<p<<endl;
 
-    vector<Mat> basePyr,depthPyr,inPyr,cameraMatrixPyr;
-    createPyramids(base,depth,input,cameraMatrix,basePyr,depthPyr,inPyr,cameraMatrixPyr,levels);
+    vector<Mat> basePyr, depthPyr, inPyr, cameraMatrixPyr;
+    createPyramids(base, depth, input, cameraMatrix, basePyr, depthPyr, inPyr, cameraMatrixPyr, levels);
     
     vector<Mat> lfPyr;
-    createPyramid(lastFrameGray,lfPyr,levels);
+    createPyramid(lastFrameGray, lfPyr, levels);
     
-    
-
-
-    
-    int level=startlevel;
-    Mat p2d=Mat::zeros(1,6,CV_64FC1);
-    for (; level<LEVELS_2D; level++){
-        int iters=1;
-        for(int i=0;i<iters;i++){
-            //HACK: use 3d alignment with depth disabled for 2D. ESM would be much better, but I'm lazy right now.
-            align_level_largedef_gray_forward(  lfPyr[level],//Total Mem cost ~185 load/stores of image
+    int level = startlevel;
+    Mat p2d = Mat::zeros(1, 6, CV_64FC1);
+    for (; level < LEVELS_2D; level++){
+        int iters = 1;
+        for(int i = 0; i < iters; i++){
+            //HACK: use 3d alignment with depth disabled for 2D. 
+            align_level_largedef_gray_forward(  lfPyr[level], //Total Mem cost ~185 load/stores of image
                                                 depthPyr[level]*0.0,
                                                 inPyr[level],
-                                                cameraMatrixPyr[level],//Mat_<double>
-                                                p2d,                //Mat_<double>, pose of 2D without depth
+                                                cameraMatrixPyr[level], //Mat_<double>
+                                                p2d,                    //Mat_<double>, pose of 2D without depth
                                                 CV_DTAM_FWD,
                                                 1,
                                                 3); // 3 parameters for inter-frame rotation
-//             if(tocq()>.01)
-//                 break;
         }
     }
-    p=LieAdd(p2d,p);
-//     cout<<"3D iteration:"<<endl;
-    for (level=startlevel; level<levels && level<endlevel; level++){
-        int iters=1;
-        for(int i=0;i<iters;i++){
-            float thr = (levels-level)>=2 ? .05 : .2; //more stringent matching on last two levels 
+    p = LieAdd(p2d, p);
+ 
+    //cout<<"3D iteration:"<<endl;
+    for (level = startlevel; level < levels && level < endlevel; level++){
+        int iters = 1;
+        for(int i = 0; i < iters; i++) {
+            float thr = (levels-level) >= 2 ? .05 : .2; // more stringent matching on last two levels 
             bool improved;
-            improved = align_level_largedef_gray_forward(   basePyr[level],//Total Mem cost ~185 load/stores of image
+            improved = align_level_largedef_gray_forward(   basePyr[level], //Total Mem cost ~185 load/stores of image
                                                             depthPyr[level],
                                                             inPyr[level],
-                                                            cameraMatrixPyr[level],//Mat_<double>
-                                                            p,                //Mat_<double>, pose of 3D
+                                                            cameraMatrixPyr[level], //Mat_<double>
+                                                            p,                      //Mat_<double>, pose of 3D
                                                             CV_DTAM_FWD,
                                                             thr,
-                                                            6);
-            
-//             if(tocq()>.5){
-//                 cout<<"completed up to level: "<<level-startlevel+1<<"   iter: "<<i+1<<endl;
-//                 goto loopend;//olny sactioned use of goto, the double break
-//             }
-//             if(!improved){
-//                 break;
-//             }
+                                                            6); // 6DOF refinement for accurate pose
         }
     }
+
     loopend:
     
-    pose=LieAdd(p,basePose);
-    static int runs=0;
-    //assert(runs++<2);
+    pose = LieAdd(p, basePose); // Final pose
+
     toc();
-    
 }
 
 // See reprojectCloud.cpp for explanation of the form 
@@ -208,8 +194,6 @@ void Track::align_gray(Mat& _base, Mat& depth, Mat& _input){
 //     Scharr( src_gray, g_x, ddepth, 1, 0, scale, delta, BORDER_DEFAULT );
 //     Scharr( src_gray, g_y, ddepth, 1, 0, scale, delta, BORDER_DEFAULT );
 // }
-
-
 
 
 void Track::ESM(){
@@ -256,12 +240,7 @@ void Track::ESM(){
 //         p=ESMStep();
 //     }
 // 
-    
-    
-    
 }
-
-
 
 // vector<double> Track::PJCRStep(const Mat& base,
 //                                const Mat& depth,
@@ -369,7 +348,7 @@ static inline void JacobianCore(Mat& dMdp,
         free(tmp);
     }
     
-    H+=J*J.t();//add to the hessian accumulator TODO: this might need to be increased to hold things as doubles
+    H += J*J.t(); //add to the hessian accumulator TODO: this might need to be increased to hold things as doubles
 }
 
 static inline void solveJacobian(Mat& dMdp,
@@ -395,14 +374,6 @@ static inline void solveJacobian(Mat& dMdp,
     // Now J has been filled out and H is complete
     p+=H.inv()*(J*err);
 }
-
-
-
-
-
-
-
-    
 
 void ESMStep(const Mat& gradMTI,//2ch * N cols
              const Mat& dMdp,//2ch * 3 rows * N cols
@@ -499,35 +470,3 @@ void ESMStep(const Mat& gradMTI,//2ch * N cols
 //     
 // }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                              
-                                

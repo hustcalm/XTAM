@@ -12,7 +12,7 @@ void reproject( const cv::Mat& src,
                 cv::Mat& dst,
                 cv::Mat& mask);
 
-template <class T>//fully qualified variant
+template <class T> //fully qualified variant
 inline void reproject( const cv::Mat_<T>& src,
                 const cv::Matx33d& cameraMatrix,
                 const cv::Matx44d& cameraAffinePoseBase,
@@ -24,7 +24,7 @@ inline void reproject( const cv::Mat_<T>& src,
     const cv::Mat m1(src);
     const cv::Mat m2(cameraMatrix);
     const cv::Mat m3(cameraAffinePoseBase);
-    const cv::Mat m4( cameraAffinePoseAlternate);
+    const cv::Mat m4(cameraAffinePoseAlternate);
 
 
     reproject(  m1,m2,m3,m4,
@@ -32,6 +32,7 @@ inline void reproject( const cv::Mat_<T>& src,
                 (cv::Mat&)( dst),
                 (cv::Mat&)(mask));
 }
+
 //Template version:
 /*
 template <class T>

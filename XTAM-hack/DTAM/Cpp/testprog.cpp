@@ -8,7 +8,7 @@
 #include "convertAhandaPovRayToStandard.h"
 #include "CostVolume/utils/reproject.hpp"
 #include "CostVolume/utils/reprojectCloud.hpp"
-#include "CostVolume/Cost.h"
+#include "CostVolume/Cost.hpp"
 #include "CostVolume/CostVolume.hpp"
 #include "Optimizer/Optimizer.hpp"
 #include "DepthmapDenoiseWeightedHuber/DepthmapDenoiseWeightedHuber.hpp"
@@ -87,8 +87,8 @@ int App_main( int argc, char** argv )
         Mat image;
         cout<<"Opening: "<< filename << endl;
         
-        imread(filename, -1).convertTo(image,CV_32FC3,1.0/65535.0);
-        resize(image,image,Size(),reconstructionScale,reconstructionScale);
+        imread(filename, -1).convertTo(image,CV_32FC3, 1.0/65535.0);
+        resize(image,image,Size(), reconstructionScale, reconstructionScale);
         
         images.push_back(image.clone());
         Rs.push_back(R.clone());

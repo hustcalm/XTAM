@@ -77,22 +77,22 @@
 using namespace cv;
 using namespace std;
 
-Mat reprojectCloud(const Mat comparison,const Mat _im, const Mat _depth, const Mat _oldPose, const Mat _newPose, const Mat _cameraMatrix){
+Mat reprojectCloud(const Mat comparison, const Mat _im, const Mat _depth, const Mat _oldPose, const Mat _newPose, const Mat _cameraMatrix){
 
-    Mat im=_im;
-    Mat_<float> depth=_depth;
-    Mat oldPose=make4x4(_oldPose);
-    Mat newPose=make4x4(_newPose);
-    Mat cameraMatrix=make4x4(_cameraMatrix);
-    Mat  proj(4,4,CV_64FC1);
-    Mat_<Vec3f> xyin(im.rows,im.cols);
-    Mat_<Vec2f> xyout(im.rows,im.cols);
+    Mat im = _im;
+    Mat_<float> depth = _depth;
+    Mat oldPose = make4x4(_oldPose);
+    Mat newPose = make4x4(_newPose);
+    Mat cameraMatrix = make4x4(_cameraMatrix);
+    Mat  proj(4, 4, CV_64FC1);
+    Mat_<Vec3f> xyin(im.rows, im.cols);
+    Mat_<Vec2f> xyout(im.rows, im.cols);
 
 //     cout<<cameraMatrix<<endl;
 //     cout<<newPose<<endl;
 //     cout<<oldPose<<endl;
 
-    proj=cameraMatrix*newPose*oldPose.inv()*cameraMatrix.inv();
+    proj = cameraMatrix*newPose*oldPose.inv()*cameraMatrix.inv();
 //     cout<<"True Mapping:"<<endl;
 //     cout<<proj<<endl;
     
@@ -103,87 +103,85 @@ Mat reprojectCloud(const Mat comparison,const Mat _im, const Mat _depth, const M
 //     cout<<proj*(Mat_<double>(4,1)<<5,3,.25,1)/  1.016258142543584    <<endl;//should match on image 2
     
     
-    
-    
-    
-    
 //     cout<<"This should be affine:"<<endl;
 //     cout<<proj<<endl;
-    Mat tmp=proj.colRange(2,4).clone();
+    Mat tmp = proj.colRange(2,4).clone(); // Swap the last two columns
     tmp.col(1).copyTo(proj.col(2));
     tmp.col(0).copyTo(proj.col(3));
-    proj=proj.rowRange(0,3).clone();
+    proj = proj.rowRange(0,3).clone(); // Drop the last row
 //     cout<<"Proj: "<<"\n"<< proj<< endl;
 
     
-//      //Check if conversions are rounded or truncated
+//     // Check if conversions are rounded or truncated
 //     tmp=(Mat_<double>(4,1)<<5,3,.7,1);
 //     tmp.convertTo(tmp,CV_32SC1);
 //     cout<<tmp<<endl;
 
-    float* pt=(float*) (xyin.data);
-    float* d=(float*) (depth.data);
-    for(int i=0;i<im.rows;i++){
-        for(int j=0;j<im.cols;j++,pt+=3,d++){
-            pt[0]=j;
-            pt[1]=i;
-            pt[2]=*d;
+    float* pt = (float*) (xyin.data);
+    float* d = (float*) (depth.data);
+    for(int i = 0; i < im.rows; i++){
+        for(int j = 0; j < im.cols; j++, pt += 3, d++){
+            pt[0] = j;
+            pt[1] = i;
+            pt[2] = *d;
         }
     }
 
-    perspectiveTransform(xyin,xyout,proj);
+    // See http://docs.opencv.org/modules/core/doc/operations_on_arrays.html
+    perspectiveTransform(xyin, xyout, proj);
 
     Mat xy;
-    xyout.convertTo(xy,CV_32SC2);//rounds! 
-    int* xyd=(int *)(xy.data);
-    Mat_<float> xmap(im.rows,im.cols,-9999.9);//9999.9's are to guarantee that pixels are invalid 
-    Mat_<float> ymap(im.rows,im.cols,-9999.9);//9999.9's are to guarantee that pixels are invalid 
-    Mat_<float> zmap(im.rows,im.cols,-9999.9);//9999.9's are to guarantee that pixels are invalid 
-    float* xm=(float*)(xmap.data);
-    float* ym=(float*)(ymap.data);
+    xyout.convertTo(xy, CV_32SC2); // rounds! 
+    int* xyd = (int *)(xy.data);
+    Mat_<float> xmap(im.rows, im.cols, -9999.9); // 9999.9's are to guarantee that pixels are invalid 
+    Mat_<float> ymap(im.rows, im.cols, -9999.9); // 9999.9's are to guarantee that pixels are invalid 
+    Mat_<float> zmap(im.rows, im.cols, -9999.9); // 9999.9's are to guarantee that pixels are invalid 
+    float* xm = (float*)(xmap.data);
+    float* ym = (float*)(ymap.data);
 
-    for(int i=0;i<im.rows;i++){
-        for(int j=0;j<im.cols;j++,xyd+=2){
-            if(xyd[1]<im.rows && xyd[1]>=0 && xyd[0]>=0 && xyd[0]<im.cols){
-                if (zmap(xyd[1],xyd[0])<depth.at<float>(i,j)){
-                    xmap(xyd[1],xyd[0])=j;
-                    ymap(xyd[1],xyd[0])=i;
-                    zmap(xyd[1],xyd[0])=depth.at<float>(i,j);
+    for(int i = 0; i < im.rows; i++){
+        for(int j = 0; j < im.cols; j++, xyd += 2){
+            if(xyd[1] < im.rows && xyd[1] >= 0 && xyd[0] >= 0 && xyd[0] < im.cols){
+                if (zmap(xyd[1], xyd[0]) < depth.at<float>(i,j)){
+                    xmap(xyd[1], xyd[0]) = j;
+                    ymap(xyd[1], xyd[0]) = i;
+                    zmap(xyd[1], xyd[0]) = depth.at<float>(i,j);
                 }
             }
         }
     }
     
-    //calculate the pullback image, with zbuffering to determine occlusion
+    // Calculate the pullback image, with zbuffering to determine occlusion
     Mat xyLayers[2];
-    split(xyout,xyLayers);
-    xyLayers[0].reshape(1,im.rows);
-    xyLayers[1].reshape(1,im.rows);
+    split(xyout, xyLayers);
+    xyLayers[0].reshape(1, im.rows);
+    xyLayers[1].reshape(1, im.rows);
     Mat pullback;
-    Mat occluded(im.rows,im.cols,CV_8UC1);
-     Mat depthPullback;
+    Mat occluded(im.rows, im.cols, CV_8UC1);
+    Mat depthPullback;
 //      pfShow("zmap",zmap);
 
-     remap( zmap, depthPullback, xyLayers[0], xyLayers[1], INTER_NEAREST, BORDER_CONSTANT, Scalar(0,0, 0) );
+     // See http://docs.opencv.org/modules/imgproc/doc/geometric_transformations.html
+     remap(zmap, depthPullback, xyLayers[0], xyLayers[1], INTER_NEAREST, BORDER_CONSTANT, Scalar(0, 0, 0));
 
-     //do a depth test
-     Mat zthr,zdiff;
-     absdiff(depthPullback,depth,zdiff);
-     zthr=(zdiff<.001);
-     cvtColor(zthr,zthr,CV_GRAY2BGR,3);
-     zthr.convertTo(zthr,CV_32FC3,1/255.0);
+     // Do a depth test
+     Mat zthr, zdiff;
+     absdiff(depthPullback, depth, zdiff);
+     zthr = (zdiff < .001);
+     cvtColor(zthr, zthr, CV_GRAY2BGR, 3);
+     zthr.convertTo(zthr, CV_32FC3, 1/255.0);
     
     
-//      pfShow("Occlusion",zdiff,0,Vec2d(0,.015/32));
+//      pfShow("Occlusion", zdiff, 0, Vec2d(0,.015/32));
     
-     remap( comparison, pullback, xyLayers[0], xyLayers[1], CV_INTER_NN, BORDER_CONSTANT, Scalar(0,0, 0) );
-     Mat photoerr,pthr;
-     absdiff(im,pullback,photoerr);
+     remap(comparison, pullback, xyLayers[0], xyLayers[1], CV_INTER_NN, BORDER_CONSTANT, Scalar(0,0, 0) );
+     Mat photoerr, pthr;
+     absdiff(im, pullback, photoerr);
 
-     cvtColor(photoerr,photoerr,CV_BGR2GRAY);
-     pthr=photoerr>.1;
-     cvtColor(pthr,pthr,CV_GRAY2RGB);
-     pthr.convertTo(pthr,CV_32FC3,1/255.0);
+     cvtColor(photoerr, photoerr, CV_BGR2GRAY);
+     pthr = (photoerr > .1);
+     cvtColor(pthr, pthr, CV_GRAY2RGB);
+     pthr.convertTo(pthr, CV_32FC3, 1/255.0);
 
  //     pullback.convertTo(pullback,CV_32FC3,1/255.0);
  //     CV_Assert(
@@ -191,32 +189,25 @@ Mat reprojectCloud(const Mat comparison,const Mat _im, const Mat _depth, const M
 
 
      Mat confidence;
-     sqrt(pthr,confidence);
-     confidence=Scalar(1,1,1)-confidence;
-     pullback=pullback.mul(confidence).mul(zthr);
-//      pfShow("Stabilized Projection",pullback,0,Vec2d(0,1));
+     sqrt(pthr, confidence);
+     confidence = Scalar(1,1,1) - confidence;
+     pullback = pullback.mul(confidence).mul(zthr);
+//      pfShow("Stabilized Projection", pullback, 0, Vec2d(0,1));
     static Mat fwdp2;
-    static Mat fwdp=im.clone();
-    remap( im, fwdp, xmap, ymap, INTER_NEAREST, BORDER_CONSTANT,Scalar(0,0,0));
-//     medianBlur(fwdp,fwdp2,3);
-// //     remap( im, fwdp, xmap, ymap, INTER_NEAREST, BORDER_TRANSPARENT);
+    static Mat fwdp = im.clone();
+    remap(im, fwdp, xmap, ymap, INTER_NEAREST, BORDER_CONSTANT, Scalar(0,0,0));
+//     medianBlur(fwdp, fwdp2,3);
+//     remap( im, fwdp, xmap, ymap, INTER_NEAREST, BORDER_TRANSPARENT);
 //     
 //     fwdp2.copyTo(fwdp,fwdp==0);
 //     medianBlur(fwdp,fwdp2,3);
 //     fwdp2.copyTo(fwdp,fwdp==0);
-    pfShow("Predicted Image",fwdp,0,Vec2d(0,1));
+    pfShow("Predicted Image", fwdp, 0, Vec2d(0,1));
 //     absdiff(fwdp,comparison,zdiff);
-    pfShow("Actual Image",comparison);
+    pfShow("Actual Image", comparison);
    
-    
-
-    
 //     pfShow("diff",zdiff.mul(fwdp));
     
-
-
-
     return xyout;
-    
 }
 
