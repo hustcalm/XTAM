@@ -23,11 +23,8 @@
 //debug
 #include "tictoc.h"
 
-
-
-
-
 const static bool valgrind=0;
+const static bool usePovRay = true;
 
 //A test program to make the mapper run
 using namespace cv;
@@ -68,21 +65,23 @@ int App_main( int argc, char** argv )
     for(int i=0;i<numImg;i++){
         Mat tmp;
 
-        /*
-        sprintf(filename,"DTAM/Trajectory_30_seconds/scene_%03d.png",i);
-        convertAhandaPovRayToStandard("DTAM/Trajectory_30_seconds",
-                                      i,
-                                      cameraMatrix,
-                                      R,
-                                      T);
-                                      */
+        if(usePovRay) {
+            sprintf(filename,"DTAM/Trajectory_30_seconds/scene_%03d.png",i);
+            convertAhandaPovRayToStandard("DTAM/Trajectory_30_seconds",
+                                          i,
+                                          cameraMatrix,
+                                          R,
+                                          T);
+        }
+        else {
+            sprintf(filename, "./imageSequences/image_%03d.png",i+1);
+            convertPTAMSequenceToStandard("./imageSequences",
+                                          i+1,
+                                          cameraMatrix,
+                                          R,
+                                          T);
+        }
 
-        sprintf(filename, "./imageSequences/image_%03d.png",i+1);
-        convertPTAMSequenceToStandard("./imageSequences",
-                                      i+1,
-                                      cameraMatrix,
-                                      R,
-                                      T);
 
         Mat image;
         cout<<"Opening: "<< filename << endl;
@@ -96,22 +95,25 @@ int App_main( int argc, char** argv )
         Rs0.push_back(R.clone());
         Ts0.push_back(T.clone());
     }
+
     CudaMem cret(images[0].rows,images[0].cols,CV_32FC1);
-    ret=cret.createMatHeader();
+    ret = cret.createMatHeader();
+
     //Setup camera matrix
-    double sx=reconstructionScale;
-    double sy=reconstructionScale;
-    cameraMatrix+=(Mat)(Mat_<double>(3,3) <<    0.0,0.0,0.5,
+    double sx = reconstructionScale;
+    double sy = reconstructionScale;
+    cameraMatrix += (Mat)(Mat_<double>(3,3) <<    0.0,0.0,0.5,
                                                 0.0,0.0,0.5,
                                                 0.0,0.0,0.0);
-    cameraMatrix=cameraMatrix.mul((Mat)(Mat_<double>(3,3) <<    sx,0.0,sx,
+    cameraMatrix = cameraMatrix.mul((Mat)(Mat_<double>(3,3) <<    sx,0.0,sx,
                                                                 0.0,sy ,sy,
                                                                 0.0,0.0,1.0));
-    cameraMatrix-=(Mat)(Mat_<double>(3,3) <<    0.0,0.0,0.5,
+    cameraMatrix -= (Mat)(Mat_<double>(3,3) <<    0.0,0.0,0.5,
                                                 0.0,0.0,0.5,
                                                 0.0,0.0,0);
-    int layers=32;
-    int imagesPerCV=20;
+    int layers = 32;
+    int imagesPerCV = 20;
+    
     //CostVolume cv(images[0],(FrameID)0,layers,0.015,0.0,Rs[0],Ts[0],cameraMatrix);
     CostVolume cv(images[0],(FrameID)0,layers,5,0.0,Rs[0],Ts[0],cameraMatrix);
 
@@ -125,23 +127,23 @@ int App_main( int argc, char** argv )
 //     }
     
     //Old Way
-    int imageNum=0;
+    int imageNum = 0;
     
-    int inc=1;
+    int inc = 1;
     
     cv::gpu::Stream s;
     
-    for (int imageNum=1;imageNum<numImg;imageNum++){
+    for (int imageNum = 1; imageNum < numImg; imageNum++){
         cout << "Image Number: " << imageNum << endl;
 
-        if (inc==-1 && imageNum<4){
-            inc=1;
+        if (inc == -1 && imageNum < 4){
+            inc = 1;
         }
-        T=Ts[imageNum].clone();
-        R=Rs[imageNum].clone();
-        image=images[imageNum];
+        T = Ts[imageNum].clone();
+        R = Rs[imageNum].clone();
+        image = images[imageNum];
 
-        if(cv.count<imagesPerCV){
+        if(cv.count < imagesPerCV){
             
             cv.updateCost(image, R, T);
             cudaDeviceSynchronize();
@@ -155,7 +157,7 @@ int App_main( int argc, char** argv )
             cudaDeviceSynchronize();
             //Attach optimizer
             Ptr<DepthmapDenoiseWeightedHuber> dp = createDepthmapDenoiseWeightedHuber(cv.baseImageGray,cv.cvStream);
-            DepthmapDenoiseWeightedHuber& denoiser=*dp;
+            DepthmapDenoiseWeightedHuber& denoiser = *dp;
             Optimizer optimizer(cv);
             optimizer.initOptimization();
             GpuMat a(cv.loInd.size(),cv.loInd.type());
@@ -214,24 +216,26 @@ int App_main( int argc, char** argv )
 //             imwrite("outz.png",ret);
             
             Track tracker(cv);
-            Mat out=optimizer.depthMap();
+            Mat out = optimizer.depthMap();
             double m;
-            minMaxLoc(out,NULL,&m);
-            tracker.depth=out*(.66*cv.near/m);
-            if (imageNum+imagesPerCV+1>=numImg){
-                inc=-1;
+            minMaxLoc(out, NULL, &m);
+            tracker.depth = out*(.66*cv.near/m);
+
+            if (imageNum + imagesPerCV + 1 >= numImg){
+                inc = -1;
             }
-            imageNum-=imagesPerCV+1-inc;
-            for(int i=imageNum;i<numImg&&i<=imageNum+imagesPerCV+1;i++){
+
+            imageNum -= imagesPerCV + 1 - inc;
+            for(int i = imageNum; i < numImg && i <= imageNum + imagesPerCV + 1;i++){
                 tracker.addFrame(images[i]);
                 tracker.align();
                 LieToRT(tracker.pose,R,T);
-                Rs[i]=R.clone();
-                Ts[i]=T.clone();
+                Rs[i] = R.clone();
+                Ts[i] = T.clone();
                 
-                Mat p,tp;
-                p=tracker.pose;
-                tp=RTToLie(Rs0[i],Ts0[i]);
+                Mat p, tp;
+                p = tracker.pose;
+                tp = RTToLie(Rs0[i], Ts0[i]);
                 {//debug
                     cout << "True Pose: "<< tp << endl;
                     cout << "True Delta: "<< LieSub(tp,tracker.basePose) << endl;
@@ -241,11 +245,11 @@ int App_main( int argc, char** argv )
                 }
                 cout<<i<<endl;
                 cout<<Rs0[i]<<Rs[i];
-                reprojectCloud(images[i],images[cv.fid],tracker.depth,RTToP(Rs[cv.fid],Ts[cv.fid]),RTToP(Rs[i],Ts[i]),cameraMatrix);
+                reprojectCloud(images[i], images[cv.fid], tracker.depth, RTToP(Rs[cv.fid],Ts[cv.fid]), RTToP(Rs[i],Ts[i]), cameraMatrix);
             }
             //cv=CostVolume(images[imageNum],(FrameID)imageNum,layers,0.015,0.0,Rs[imageNum],Ts[imageNum],cameraMatrix);
-            cv=CostVolume(images[imageNum],(FrameID)imageNum,layers,5,0.0,Rs[imageNum],Ts[imageNum],cameraMatrix);
-            s=optimizer.cvStream;
+            cv = CostVolume(images[imageNum], (FrameID)imageNum, layers, 5, 0.0, Rs[imageNum], Ts[imageNum], cameraMatrix);
+            s = optimizer.cvStream;
 //             for (int imageNum=0;imageNum<numImg;imageNum=imageNum+1){
 //                 reprojectCloud(images[imageNum],images[0],optimizer.depthMap(),RTToP(Rs[0],Ts[0]),RTToP(Rs[imageNum],Ts[imageNum]),cameraMatrix);
 //             }
@@ -258,5 +262,4 @@ int App_main( int argc, char** argv )
     Stream::Null().waitForCompletion();
     return 0;
 }
-
 
