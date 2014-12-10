@@ -114,8 +114,8 @@ int App_main( int argc, char** argv )
     int layers = 32;
     int imagesPerCV = 20;
     
-    //CostVolume cv(images[0],(FrameID)0,layers,0.015,0.0,Rs[0],Ts[0],cameraMatrix);
-    CostVolume cv(images[0],(FrameID)0,layers,5,0.0,Rs[0],Ts[0],cameraMatrix);
+    CostVolume cv(images[0],(FrameID)0,layers,0.015,0.0,Rs[0],Ts[0],cameraMatrix);
+    //CostVolume cv(images[0],(FrameID)0,layers,5,0.0,Rs[0],Ts[0],cameraMatrix);
 
 //     //New Way (Needs work)
 //     OpenDTAM odm(cameraMatrix);
@@ -247,8 +247,8 @@ int App_main( int argc, char** argv )
                 cout<<Rs0[i]<<Rs[i];
                 reprojectCloud(images[i], images[cv.fid], tracker.depth, RTToP(Rs[cv.fid],Ts[cv.fid]), RTToP(Rs[i],Ts[i]), cameraMatrix);
             }
-            //cv=CostVolume(images[imageNum],(FrameID)imageNum,layers,0.015,0.0,Rs[imageNum],Ts[imageNum],cameraMatrix);
-            cv = CostVolume(images[imageNum], (FrameID)imageNum, layers, 5, 0.0, Rs[imageNum], Ts[imageNum], cameraMatrix);
+            cv=CostVolume(images[imageNum],(FrameID)imageNum,layers,0.015,0.0,Rs[imageNum],Ts[imageNum],cameraMatrix);
+            //cv = CostVolume(images[imageNum], (FrameID)imageNum, layers, 5, 0.0, Rs[imageNum], Ts[imageNum], cameraMatrix);
             s = optimizer.cvStream;
 //             for (int imageNum=0;imageNum<numImg;imageNum=imageNum+1){
 //                 reprojectCloud(images[imageNum],images[0],optimizer.depthMap(),RTToP(Rs[0],Ts[0]),RTToP(Rs[imageNum],Ts[imageNum]),cameraMatrix);

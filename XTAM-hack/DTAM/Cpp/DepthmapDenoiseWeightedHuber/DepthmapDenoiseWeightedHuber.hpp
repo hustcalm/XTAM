@@ -5,7 +5,7 @@
 
 #ifndef DepthmapDenoiseWeightedHuber_H
 #define DepthmapDenoiseWeightedHuber_H
-#include <opencv2/core/core.hpp>//for CV_EXPORTS
+#include <opencv2/core/core.hpp> //for CV_EXPORTS
 #include <opencv2/gpu/gpu.hpp>
 namespace cv{
     namespace gpu{
@@ -32,7 +32,7 @@ namespace cv{
                                       float theta) = 0;
 
             //! In case you want to do these explicitly
-            virtual void allocate(int rows, int cols, InputArray gx = GpuMat(),InputArray gy = GpuMat()) = 0;
+            virtual void allocate(int rows, int cols, InputArray gx = GpuMat(), InputArray gy = GpuMat()) = 0;
             virtual void cacheGValues(InputArray visibleLightImage = GpuMat()) = 0;
             
             virtual void setStream(Stream s) = 0;
@@ -47,7 +47,7 @@ namespace cv{
 
         //! The visibleLightImage is a CV_32FC1 grayscale image of the scene, which can be used as a hint for edge placement.
         CV_EXPORTS Ptr<DepthmapDenoiseWeightedHuber>
-            createDepthmapDenoiseWeightedHuber(InputArray visibleLightImage=GpuMat(), Stream cvStream=Stream::Null());
+            createDepthmapDenoiseWeightedHuber(InputArray visibleLightImage = GpuMat(), Stream cvStream = Stream::Null());
     }
 }
 
@@ -73,29 +73,30 @@ namespace cv{
         public:
             //CostVolume cv;//The cost volume we are attached to
             
-            DepthmapDenoiseWeightedHuberImpl(const GpuMat& visibleLightImage=GpuMat(),Stream cvStream=Stream::Null());
+            DepthmapDenoiseWeightedHuberImpl(const GpuMat& visibleLightImage = GpuMat(), Stream cvStream = Stream::Null());
             GpuMat operator()(InputArray ain, float epsilon, float theta);
 
             GpuMat visibleLightImage;
-            //buffers
-            GpuMat _qx,_qy,_d,_a,_g,_g1,_gx,_gy;
+            
+            // Buffers
+            GpuMat _qx, _qy, _d, _a, _g, _g1, _gx, _gy;
             GpuMat stableDepth;
 
 
-            //in case you want to do these explicitly
+            // In case you want to do these explicitly
             void allocate(int rows,int cols, InputArray gxin = GpuMat(), InputArray gyin = GpuMat());
-            void cacheGValues(InputArray visibleLightImage=GpuMat());
+            void cacheGValues(InputArray visibleLightImage = GpuMat());
 
         private:
             int rows;
             int cols;
 
-            void computeSigmas(float epsilon,float theta);
+            void computeSigmas(float epsilon, float theta);
 
-            //internal parameter values
+            // Internal parameter values
             float sigma_d,sigma_q;
 
-            //flags
+            // Flags
             bool cachedG;
             int alloced;
             int dInited;

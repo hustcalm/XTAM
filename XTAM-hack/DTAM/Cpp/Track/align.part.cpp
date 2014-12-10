@@ -184,7 +184,7 @@ void Track::align_gray(Mat& _base, Mat& depth, Mat& _input){
 // 
 // The equations: 
 // All solvers fundamentally solve:
-// J*dp=T-I
+// J*dp = T-I
 // by doing:
 // (J'*J)^-1*J'*(T-I)
 // The problem is we don't want to use pixels

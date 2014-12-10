@@ -20,6 +20,7 @@
 #include <fstream>
 #include <fcntl.h>
 
+#include <opencv2/core/core.hpp>
 
 using namespace CVD;
 using namespace std;
@@ -83,6 +84,108 @@ void Tracker::Reset()
 }
 
 void Tracker::TrackFrame(Image<byte> &imFrame, bool bDraw)
+{
+  //cout << "TrackFrame " << mnFrame << endl;
+
+  mbDraw = bDraw;
+  mMessageForUser.str("");   // Wipe the user message clean
+  
+  // Take the input video image, and convert it into the tracker's keyframe struct
+  // This does things like generate the image pyramid and find FAST corners
+  mCurrentKF.mMeasurements.clear();
+  mCurrentKF.MakeKeyFrame_Lite(imFrame);
+
+  // Update the small images for the rotation estimator
+  static gvar3<double> gvdSBIBlur("Tracker.RotationEstimatorBlur", 0.75, SILENT);
+  static gvar3<int> gvnUseSBI("Tracker.UseRotationEstimator", 1, SILENT);
+  mbUseSBIInit = *gvnUseSBI;
+  if(!mpSBIThisFrame)
+    {
+      mpSBIThisFrame = new SmallBlurryImage(mCurrentKF, *gvdSBIBlur);
+      mpSBILastFrame = new SmallBlurryImage(mCurrentKF, *gvdSBIBlur);
+    }
+  else
+    {
+      delete  mpSBILastFrame;
+      mpSBILastFrame = mpSBIThisFrame;
+      mpSBIThisFrame = new SmallBlurryImage(mCurrentKF, *gvdSBIBlur);
+    }
+  
+  // From now on we only use the keyframe struct!
+  mnFrame++;
+  
+  if(mbDraw)
+    {
+      glDrawPixels(mCurrentKF.aLevels[0].im);
+      if(GV2.GetInt("Tracker.DrawFASTCorners",0, SILENT))
+	{
+	  glColor3f(1,0,1);  glPointSize(1); 
+      glBegin(GL_POINTS);
+	  for(unsigned int i=0; i<mCurrentKF.aLevels[0].vCorners.size(); i++) 
+	    glVertex(mCurrentKF.aLevels[0].vCorners[i]);
+	  glEnd();
+	}
+    }
+  
+  // Decide what to do - if there is a map, try to track the map ...
+  if(mMap.IsGood())
+    {
+      if(mnLostFrames < 3)  // .. but only if we're not lost!
+	{
+	  if(mbUseSBIInit)
+	    CalcSBIRotation(); // frame-to-frame rotation estimation
+
+	  ApplyMotionModel();       // 
+	  TrackMap();               //  These three lines do the main tracking work.
+	  UpdateMotionModel();      // 
+	  
+	  AssessTrackingQuality();  //  Check if we're lost or if tracking is poor.
+	  
+	  { // Provide some feedback for the user:
+	    mMessageForUser << "Tracking Map, quality ";
+	    if(mTrackingQuality == GOOD)  mMessageForUser << "good.";
+	    if(mTrackingQuality == DODGY) mMessageForUser << "poor.";
+	    if(mTrackingQuality == BAD)   mMessageForUser << "bad.";
+	    mMessageForUser << " Found:";
+	    for(int i=0; i<LEVELS; i++) mMessageForUser << " " << manMeasFound[i] << "/" << manMeasAttempted[i];
+	    //	    mMessageForUser << " Found " << mnMeasFound << " of " << mnMeasAttempted <<". (";
+	    mMessageForUser << " Map: " << mMap.vpPoints.size() << "P, " << mMap.vpKeyFrames.size() << "KF";
+	  }
+	  
+	  // Heuristics to check if a key-frame should be added to the map:
+	  if(mTrackingQuality == GOOD &&
+	     mMapMaker.NeedNewKeyFrame(mCurrentKF) &&
+	     mnFrame - mnLastKeyFrameDropped > 20  &&
+	     mMapMaker.QueueSize() < 3)
+	    {
+	      mMessageForUser << " Adding key-frame.";
+	      AddNewKeyFrame();
+	    };
+	}
+      else  // what if there is a map, but tracking has been lost?
+	{
+	  mMessageForUser << "** Attempting recovery **.";
+	  if(AttemptRecovery())
+	    {
+	      TrackMap();
+	      AssessTrackingQuality();
+	    }
+	}
+      if(mbDraw)
+	RenderGrid();
+    } 
+  else // If there is no map, try to make one.
+    TrackForInitialMap(); 
+  
+  // GUI interface
+  while(!mvQueuedCommands.empty())
+    {
+      GUICommandHandler(mvQueuedCommands.begin()->sCommand, mvQueuedCommands.begin()->sParams);
+      mvQueuedCommands.erase(mvQueuedCommands.begin());
+    }
+}
+
+void Tracker::TrackFrame(Image<byte> &imFrame, cv::Mat &imFrameRaw, bool bDraw)
 {
   //cout << "TrackFrame " << mnFrame << endl;
 

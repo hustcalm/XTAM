@@ -20,7 +20,7 @@ using namespace GVars3;
 
 #include "DTAM/Cpp/CostVolume/utils/reproject.hpp"
 #include "DTAM/Cpp/CostVolume/utils/reprojectCloud.hpp"
-#include "DTAM/Cpp/CostVolume/Cost.h"
+#include "DTAM/Cpp/CostVolume/Cost.hpp"
 #include "DTAM/Cpp/CostVolume/CostVolume.hpp"
 #include "DTAM/Cpp/Optimizer/Optimizer.hpp"
 #include "DTAM/Cpp/DepthmapDenoiseWeightedHuber/DepthmapDenoiseWeightedHuber.hpp"
@@ -31,11 +31,27 @@ using namespace GVars3;
 #include "DTAM/Cpp/utils/utils.hpp"
 #include "DTAM/Cpp/tictoc.h"
 
-const static bool valgrind=0;
+#include <pthread.h>
+
+const static bool valgrind = 0;
+static bool collectOfflineImageSequenceMode = false;
+static bool collectDenseInitialFrames = true;
 
 //A test program to make the mapper run
 using namespace cv;
 using namespace cv::gpu;
+
+// Thread stuff
+int init_thread_id;
+pthread_t init_thread;
+
+
+void* testPthread(void* ptr) {
+    cout<<"Hello Pthread from XTAM..."<<endl;
+}
+
+void* dense_init_func(void* ptr) {
+}
 
 /**
  * The default System contructor.
@@ -57,6 +73,12 @@ System::System()
   
   // Get camera parameters through GV3
   vTest = GV3::get<TooN::Vector<NUMTRACKERCAMPARAMETERS> >("Camera.Parameters", ATANCamera::mvDefaultParams, HIDDEN);
+
+  // Spawn threads for initialization and other stuff maybe
+  init_thread_id = pthread_create(&init_thread, NULL, testPthread, NULL);
+  if(init_thread_id) {
+      cout<<"Error, pthread_create() return code:"<<init_thread_id<<endl;
+  }
 
   // Construct a live camera
   cout << "Constucting the camera..." << endl;
@@ -98,6 +120,7 @@ System::System()
   GUI.ParseLine("Menu.AddMenuToggle Root \"Draw AR\" DrawAR Root");
   
   mbDone = false;
+
 };
 
 void System::Run()
@@ -162,11 +185,22 @@ void System::Run()
     }
 }
 
+vector<cv::Mat> initFrames;
+vector<cv::Mat> initPoses;
+int initFramesToCollect = 50;
+int initFrameNum = 0;
+
 void System::RunDTAM()
 {
   static int testFramesNum = 0;
   vector<cv::Mat> testFrames;
   vector<SE3<> > testFramePoses;
+
+  typedef struct tagDepthRange {
+      float near;
+      float far;
+  }depthRange;
+
   char fileName[500];
   while(!mbDone)
     {
@@ -207,13 +241,15 @@ void System::RunDTAM()
       
       // Track the frame
       mpTracker->TrackFrame(mimFrameBW, !bDrawAR && !bDrawMap);
+      //mpTracker->TrackFrame(mimFrameBW, mimFrame, !bDrawAR && !bDrawMap);
+
       /*
       cv::Mat R, T, cameraMatrix;
       int layers=32;
       int imagesPerCV=20;
-      //CostVolume cv(images[0], (FrameID)0, layers, 0.015, 0.0, Rs[0], Ts[0],cameraMatrix);
+      CostVolume cv(images[0], (FrameID)0, layers, 0.015, 0.0, Rs[0], Ts[0], cameraMatrix);
       */
-      if(mpTracker->isInitialDone()) {
+      if(mpTracker->isInitialDone() && collectOfflineImageSequenceMode == true) {
           SE3<> se3CamFromWorld;
           se3CamFromWorld = mpTracker->GetCurrentPose();
           testFramePoses.push_back(se3CamFromWorld);
@@ -222,13 +258,36 @@ void System::RunDTAM()
           if(testFramesNum <= 600) {
               //mbDone=  true;
           
-          sprintf(fileName,"./imageSequences/image_%03d.png", testFramesNum);
+          sprintf(fileName, "./imageSequences/image_%03d.png", testFramesNum);
           cv::imwrite(fileName, mimFrame);
 
-          sprintf(fileName,"./imageSequences/image_%03d.txt", testFramesNum);
+          sprintf(fileName, "./imageSequences/image_%03d.txt", testFramesNum);
           std::ofstream poseFile (fileName);
           poseFile<<se3CamFromWorld;
           poseFile.close();
+          }
+      }
+
+      if(mpTracker->isInitialDone() && collectDenseInitialFrames == true) {
+          static bool getSecondKF = true;
+          if(getSecondKF == true) {
+              //initFrames.push_back(mpTracker->mSecondKF);
+              //initPoses.push_back(mpTracker->mSecondKF.se3CfromW);
+              initFrameNum++;
+              getSecondKF = false;
+          }
+
+          // Collect overlapping images
+          SE3<> se3CamFromWorld;
+          se3CamFromWorld = mpTracker->GetCurrentPose();
+          //initPoses.push_back(se3CamFromWorld);
+          //initFrames.push_back(mimFrame.clone());
+          initFrameNum++;
+          if(initFrameNum == initFramesToCollect) {
+              collectDenseInitialFrames = false;
+
+              // Start initial MapMaker thread of DTAM by notifying the thread 
+              // and passing frames along with poses to the initial MapMaker
           }
       }
 
@@ -252,180 +311,6 @@ void System::RunDTAM()
       mGLWindow.swap_buffers();
       mGLWindow.HandlePendingEvents();
     }
-
-    // Test XTAM using the collected sequences
-    int len = testFrames.size();
-    cout<<"Collect " << len << "Frames from PTAM" << endl;
-
-    int numImg = len;
-
-    Mat image, cameraMatrix, R, T;
-    vector<Mat> images,Rs,Ts,Rs0,Ts0;
-    Mat ret; //a place to return downloaded images to
-
-    double reconstructionScale=5/5.;
-
-    for(int i=0;i<numImg;i++){
-        Mat image;
-        
-        // Get R and T from SE3<>
-        R *= 0;
-        T *= 0;
-        images.push_back(testFrames[i].clone());
-        Rs.push_back(R.clone());
-        Ts.push_back(T.clone());
-        Rs0.push_back(R.clone());
-        Ts0.push_back(T.clone());
-    }
-
-    CudaMem cret(images[0].rows,images[0].cols,CV_32FC1);
-    ret=cret.createMatHeader();
-    //Setup camera matrix
-    double sx=reconstructionScale;
-    double sy=reconstructionScale;
-    cameraMatrix+=(Mat)(Mat_<double>(3,3) <<    0.0,0.0,0.5,
-                                                0.0,0.0,0.5,
-                                                0.0,0.0,0.0);
-    cameraMatrix=cameraMatrix.mul((Mat)(Mat_<double>(3,3) <<    sx,0.0,sx,
-                                                                0.0,sy ,sy,
-                                                                0.0,0.0,1.0));
-    cameraMatrix-=(Mat)(Mat_<double>(3,3) <<    0.0,0.0,0.5,
-                                                0.0,0.0,0.5,
-                                                0.0,0.0,0);
-    int layers=32;
-    int imagesPerCV=20;
-    CostVolume cv(images[0],(FrameID)0,layers,0.015,0.0,Rs[0],Ts[0],cameraMatrix);
-
-    int imageNum=0;
-    
-    int inc=1;
-    
-    cv::gpu::Stream s;
-    
-    for (int imageNum=1;imageNum<numImg;imageNum++){
-        cout << "Image Number: " << imageNum << endl;
-
-        if (inc==-1 && imageNum<4){
-            inc=1;
-        }
-        T=Ts[imageNum].clone();
-        R=Rs[imageNum].clone();
-        image=images[imageNum];
-
-        if(cv.count<imagesPerCV){
-            
-            cv.updateCost(image, R, T);
-            cudaDeviceSynchronize();
-//             gpause();
-//             for( int i=0;i<layers;i++){
-//                 pfShow("layer",cv.downloadOldStyle(i), 0, cv::Vec2d(0, .5));
-//                 usleep(1000000);
-//             }
-        }
-        else{
-            cudaDeviceSynchronize();
-            //Attach optimizer
-            Ptr<DepthmapDenoiseWeightedHuber> dp = createDepthmapDenoiseWeightedHuber(cv.baseImageGray,cv.cvStream);
-            DepthmapDenoiseWeightedHuber& denoiser=*dp;
-            Optimizer optimizer(cv);
-            optimizer.initOptimization();
-            GpuMat a(cv.loInd.size(),cv.loInd.type());
-//             cv.loInd.copyTo(a,cv.cvStream);
-            cv.cvStream.enqueueCopy(cv.loInd,a);
-            GpuMat d;
-            denoiser.cacheGValues();
-            ret=image*0;
-//             pfShow("A function", ret, 0, cv::Vec2d(0, layers));
-//             pfShow("D function", ret, 0, cv::Vec2d(0, layers));
-//             pfShow("A function loose", ret, 0, cv::Vec2d(0, layers));
-//             pfShow("Predicted Image",ret,0,Vec2d(0,1));
-//             pfShow("Actual Image",ret);
-            
-            cv.loInd.download(ret);
-            pfShow("loInd", ret, 0, cv::Vec2d(0, layers));
-//                waitKey(0);
-//                gpause();
-            
-            
-
-            bool doneOptimizing = false; int Acount=0; int QDcount=0;
-            do{
-//                 cout<<"Theta: "<< optimizer.getTheta()<<endl;
-//
-//                 if(Acount==0)
-//                     gpause();
-               a.download(ret);
-               pfShow("A function", ret, 0, cv::Vec2d(0, layers));
-                
-                
-
-                for (int i = 0; i < 10; i++) {
-                    d=denoiser(a,optimizer.epsilon,optimizer.getTheta());
-                    QDcount++;
-                    
-//                    denoiser._qx.download(ret);
-//                    pfShow("Q function:x direction", ret, 0, cv::Vec2d(-1, 1));
-//                    denoiser._qy.download(ret);
-//                    pfShow("Q function:y direction", ret, 0, cv::Vec2d(-1, 1));
-                   d.download(ret);
-                   pfShow("D function", ret, 0, cv::Vec2d(0, layers));
-                }
-                doneOptimizing=optimizer.optimizeA(d,a);
-                Acount++;
-            }while(!doneOptimizing);
-//             optimizer.lambda=.05;
-//             optimizer.theta=10000;
-//             optimizer.optimizeA(a,a);
-            optimizer.cvStream.waitForCompletion();
-            a.download(ret);
-               pfShow("A function loose", ret, 0, cv::Vec2d(0, layers));
-//                gpause();
-//             cout<<"A iterations: "<< Acount<< "  QD iterations: "<<QDcount<<endl;
-//             pfShow("Depth Solution", optimizer.depthMap(), 0, cv::Vec2d(cv.far, cv.near));
-//             imwrite("outz.png",ret);
-            
-            Track tracker(cv);
-            Mat out=optimizer.depthMap();
-            double m;
-            minMaxLoc(out,NULL,&m);
-            tracker.depth=out*(.66*cv.near/m);
-            if (imageNum+imagesPerCV+1>=numImg){
-                inc=-1;
-            }
-            imageNum-=imagesPerCV+1-inc;
-            for(int i=imageNum;i<numImg&&i<=imageNum+imagesPerCV+1;i++){
-                tracker.addFrame(images[i]);
-                tracker.align();
-                LieToRT(tracker.pose,R,T);
-                Rs[i]=R.clone();
-                Ts[i]=T.clone();
-                
-                Mat p,tp;
-                p=tracker.pose;
-                tp=RTToLie(Rs0[i],Ts0[i]);
-                {//debug
-                    cout << "True Pose: "<< tp << endl;
-                    cout << "True Delta: "<< LieSub(tp,tracker.basePose) << endl;
-                    cout << "Recovered Pose: "<< p << endl;
-                    cout << "Recovered Delta: "<< LieSub(p,tracker.basePose) << endl;
-                    cout << "Pose Error: "<< p-tp << endl;
-                }
-                cout<<i<<endl;
-                cout<<Rs0[i]<<Rs[i];
-                reprojectCloud(images[i],images[cv.fid],tracker.depth,RTToP(Rs[cv.fid],Ts[cv.fid]),RTToP(Rs[i],Ts[i]),cameraMatrix);
-            }
-            cv=CostVolume(images[imageNum],(FrameID)imageNum,layers,0.015,0.0,Rs[imageNum],Ts[imageNum],cameraMatrix);
-            s=optimizer.cvStream;
-//             for (int imageNum=0;imageNum<numImg;imageNum=imageNum+1){
-//                 reprojectCloud(images[imageNum],images[0],optimizer.depthMap(),RTToP(Rs[0],Ts[0]),RTToP(Rs[imageNum],Ts[imageNum]),cameraMatrix);
-//             }
-            a.download(ret);
-            
-        }
-        s.waitForCompletion();// so we don't lock the whole system up forever
-    }
-    s.waitForCompletion();
-    Stream::Null().waitForCompletion();
 }
 
 void System::GUICommandCallBack(void *ptr, string sCommand, string sParams)

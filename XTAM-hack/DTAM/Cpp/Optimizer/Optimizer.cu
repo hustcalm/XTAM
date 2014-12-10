@@ -3,18 +3,12 @@
 #include <opencv2/core/core.hpp>
 #include "Optimizer.cuh"
 
-
 #ifndef __CUDACC__
 #define __constant__
 #define __global__
 #define __host__
 #define __device__
 #endif
-
-
-
-
-
 
 namespace cv { namespace gpu { namespace device {
     namespace dtam_optimizer{
@@ -28,9 +22,9 @@ void loadConstants(uint h_rows, uint h_cols, uint, uint,
         float*) {
 
         //special
-        arows=h_rows;
-        acols=h_cols;
-        assert(arows>0);
+        arows = h_rows;
+        acols = h_cols;
+        assert(arows > 0);
 }
 
 cudaStream_t localStream=0;

@@ -9,7 +9,7 @@ Track::Track(Cost cost){
     baseImage=lastFrame=thisFrame=cost.baseImage;
     cameraMatrix=Mat(cost.cameraMatrix);
     depth=cost.depthMap();
-    PToLie(Mat(cost.pose),basePose);
+    PToLie(Mat(cost.basePose),basePose);
     pose=basePose.clone();
 
 }

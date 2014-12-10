@@ -22,10 +22,10 @@ public:
     
     void setDefaultParams();
 
-    //public parameters
-    float thetaStart,thetaStep,thetaMin,epsilon,lambda;
+    // public parameters
+    float thetaStart, thetaStep, thetaMin, epsilon, lambda;
 
-    //buffers
+    // buffers
     cv::gpu::GpuMat _d,_a;
     cv::gpu::GpuMat stableDepth;
     float getTheta(){return theta;}
@@ -44,8 +44,6 @@ public:
     cv::Ptr<char> stableDepthReady;//really a void*
 public:
     cv::gpu::Stream cvStream;
-
-    
 };
 
 #endif // OPTIMIZER_H

@@ -30,6 +30,7 @@
 #include <vector>
 #include <list>
 
+#include <opencv2/core/core.hpp>
 
 class TrackerData;
 struct Trail    // This struct is used for initial correspondences of the first stereo pair.
@@ -49,6 +50,7 @@ public:
 
   // The new tracker of XTAM
   void TrackFrame(CVD::Image<CVD::byte> &imFrame, bool bDraw); 
+  void TrackFrame(CVD::Image<CVD::byte> &imFrame, cv::Mat &imFrameRaw, bool bDraw);
 
   inline SE3<> GetCurrentPose() { return mse3CamFromWorld;}
   
@@ -81,6 +83,7 @@ protected:
   int  TrailTracking_Advance();   // Steady-state of initial trail tracking. Called by TrackForInitialMap.
   std::list<Trail> mlTrails;      // Used by trail tracking
   KeyFrame mFirstKF;              // First of the stereo pair
+  KeyFrame mSecondKF;             // Second of the stereo pair
   KeyFrame mPreviousFrameKF;      // Used by trail tracking to check married matches
   
   // Methods for tracking the map once it has been made:

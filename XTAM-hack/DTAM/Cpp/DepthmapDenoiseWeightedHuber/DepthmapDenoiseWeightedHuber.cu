@@ -12,13 +12,14 @@ void loadConstants(uint h_rows, uint, uint , uint ,
         float* , float* , float* , float* , float* ,
         float*) {
 
-        arows=h_rows;
+        arows = h_rows;
 }
 
 cudaStream_t localStream=0;
 
-const int BLOCKX2D=32;
-const int BLOCKY2D=32;
+const int BLOCKX2D = 32;
+const int BLOCKY2D = 32;
+
 #define GENERATE_CUDA_FUNC2D(funcName,arglist,notypes)                                     \
 static __global__ void funcName arglist;                                                        \
 void funcName##Caller arglist{                                                           \
@@ -82,11 +83,12 @@ GENERATE_CUDA_FUNC2DROWS(computeG1,
     //     gr=gx;   //right spring
     //     gl=gxl;  //left spring is the right spring of the pixel to the left
     // }
+
     const float alpha=3.5f;
     int x = threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
-    int upoff=-(y!=0)*cols;
-    int dnoff=(y<gridDim.y*blockDim.y-1)*cols;
+    int upoff = -(y!=0)*cols;
+    int dnoff = (y<gridDim.y*blockDim.y-1)*cols;
     //itr0
     int pt=x+y*cols;
     float ph,pn,pu,pd,pl,pr;
@@ -171,6 +173,7 @@ GENERATE_CUDA_FUNC2DROWS(computeG1,
         g1p[pt]=g1;
 #endif
 }
+
 GENERATE_CUDA_FUNC2DROWS(computeG2,
                      (float* pp, float* g1p, float* gxp, float* gyp, int cols),
                      (pp, g1p, gxp, gyp, cols)) {
@@ -424,10 +427,12 @@ GENERATE_CUDA_FUNC2DROWS(computeGunsafe,
 #endif
 
 }
+
 __device__ inline float saturate(float x){
     //return x;
-    return x/fmaxf(1.0f,fabsf(x));
+    return x/fmaxf(1.0f, fabsf(x));
 }
+
 // static __global__ void updateQD  (float* gqxpt, float* gqypt, float *dpt, float * apt,
 //                float *gxpt, float *gypt, float sigma_q, float sigma_d, float epsilon,
 //                float theta);//DANGER, no interblock synchronization = weird instability

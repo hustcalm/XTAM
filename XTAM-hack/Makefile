@@ -5,22 +5,32 @@
 # Or to change the compiler's optimization flags
 CC = g++ -ggdb
 CXX = g++
-NVCC = nvcc
+NVCC = /usr/local/cuda/bin/nvcc
 
 MY_CUSTOM_INCLUDE_PATH = DTAM/Cpp
+CUDA_INCLUDE_PATH = /usr/local/cuda/include
+OPENCV_INCLUDE_PATH = /opt/OpenCV/include
+OPENCV_INCLUDE_PATH1 = /opt/OpenCV/include/opencv
+OPENCV_INCLUDE_PATH2 = /opt/OpenCV/include/opencv2
 
-COMPILEFLAGS = -I$(MY_CUSTOM_INCLUDE_PATH) -D_LINUX -D_REENTRANT -Wall  -O3 -march=nocona -msse3
-DTAM_COMPILEFLAGS = -I$(MY_CUSTOM_INCLUDE_PATH) -D_LINUX -D_REENTRANT -Wall  -O3 -march=nocona -msse3
-DTAM_CUDA_COMPILEFLAGS = -gencode arch=compute_30,code=sm_30 \
+CUDA_LIB_PATH1 = /usr/local/cuda/lib
+CUDA_LIB_PATH2 = /usr/local/cuda/lib64
+CUDA_LD_PATH = /usr/local/cuda/lib64
+
+OPENCV_LIB_PATH = /opt/OpenCV/lib
+
+COMPILEFLAGS = -I$(MY_CUSTOM_INCLUDE_PATH) -I$(CUDA_INCLUDE_PATH) -I$(OPENCV_INCLUDE_PATH) -I$(OPENCV_INCLUDE_PATH1) -I$(OPENCV_INCLUDE_PATH2) -D_LINUX -D_REENTRANT -Wall  -O3 -march=nocona -msse3
+DTAM_COMPILEFLAGS = -I$(MY_CUSTOM_INCLUDE_PATH) -I$(CUDA_INCLUDE_PATH) -I$(OPENCV_INCLUDE_PATH) -I$(OPENCV_INCLUDE_PATH1) -I$(OPENCV_INCLUDE_PATH2) -D_LINUX -D_REENTRANT -Wall  -O3 -march=nocona -msse3
+DTAM_CUDA_COMPILEFLAGS = -I$(OPENCV_INCLUDE_PATH) -gencode arch=compute_30,code=sm_30 \
 						 -gencode arch=compute_35,code=sm_35 \
 					     --use_fast_math \
 						 --restrict \
 						 -lineinfo \
 						 -O3
 
-LINKFLAGS = -L /usr/local/lib -lGVars3 -lcvd -lGLU -lGL -llapack 
-DTAM_LINKFLAGS = -L /usr/local/lib -lopencv_highgui -lopencv_core -lopencv_calib3d -lopencv_imgproc -lopencv_gpu -lpthread -lboost_thread -lboost_system
-DTAM_CUDA_LINKFLAGS = -L /usr/local/lib -lcudart 
+LINKFLAGS = -L/usr/local/lib -lGVars3 -lcvd -lGLU -lGL -llapack 
+DTAM_LINKFLAGS = -L/usr/local/lib -L$(OPENCV_LIB_PATH) -lopencv_highgui -lopencv_core -lopencv_calib3d -lopencv_imgproc -lopencv_gpu -lpthread -lboost_thread -lboost_system
+DTAM_CUDA_LINKFLAGS = -L/usr/local/lib -L$(CUDA_LIB_PATH2) -lcudart -Wl,-R $(CUDA_LD_PATH)
 
 # Edit this line to change video source
 #VIDEOSOURCE = VideoSource_Linux_V4L.o

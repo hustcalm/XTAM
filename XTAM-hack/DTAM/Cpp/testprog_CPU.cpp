@@ -195,6 +195,11 @@ int App_main( int argc, char** argv )
                 return -1;
             }
         }
+
+        // Save the depth map
+        cv::imwrite("image0_a_testDepthMap.png", cost._a);
+        cv::imwrite("image0_d_testDepthMap.png", cost._d);
+        cv::imwrite("image0_g_testDepthMap.png", cost._g);
         break; // Test for one depth map estimation
     }
 

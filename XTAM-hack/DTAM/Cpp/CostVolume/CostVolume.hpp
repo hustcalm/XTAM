@@ -42,33 +42,34 @@ public:
     int count;
     cv::gpu::Stream cvStream;
 
-    void updateCost(const cv::Mat& image, const cv::Mat& R, const cv::Mat& T);//Accepts pinned RGBA8888 or BGRA8888 for high speed
+    // Average photometric error
+    void updateCost(const cv::Mat& image, const cv::Mat& R, const cv::Mat& T); // Accepts pinned RGBA8888 or BGRA8888 for high speed
     
     CostVolume(){}
     ~CostVolume();
     CostVolume(cv::Mat image, FrameID _fid, int _layers, float _near, float _far,
-            cv::Mat R, cv::Mat T, cv::Mat _cameraMatrix, float initialCost=3.0, float initialWeight=.001);
+            cv::Mat R, cv::Mat T, cv::Mat _cameraMatrix, float initialCost = 3.0, float initialWeight = .001);
 
     //HACK: remove this function in release
     cv::Mat downloadOldStyle( int layer){
         cv::Mat cost;
-        cv::gpu::GpuMat tmp=dataContainer.rowRange(layer,layer+1);
+        cv::gpu::GpuMat tmp = dataContainer.rowRange(layer, layer+1);
         tmp.download(cost);
-        cost=cost.reshape(0,rows);
+        cost = cost.reshape(0, rows);
         return cost;
     }
 
 private:
-    void solveProjection(const cv::Mat& R, const cv::Mat& T);
+    void solveProjection(const cv::Mat& R, const cv::Mat& T); 
     void checkInputs(const cv::Mat& R, const cv::Mat& T,
             const cv::Mat& _cameraMatrix);
     void simpleTex(const cv::Mat& image,cv::gpu::Stream cvStream=cv::gpu::Stream::Null());
 
 private:
     //temp variables ("static" containers)
-    cv::Ptr<char> _cuArray;//Ptr<cudaArray*> really
-    cv::Ptr<char> _texObj;//Ptr<cudaTextureObject_t> really
-    cv::Mat cBuffer;//Must be pagable
+    cv::Ptr<char> _cuArray; // Ptr<cudaArray*> really
+    cv::Ptr<char> _texObj;  // Ptr<cudaTextureObject_t> really
+    cv::Mat cBuffer;        // Must be pagable
     cv::Ptr<char> ref;
 };
 

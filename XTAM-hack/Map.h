@@ -35,6 +35,9 @@ struct Map
   std::vector<KeyFrame*> vpKeyFrames;
 
   bool bGood;
+
+  float minInitDepth;
+  float maxInitDepth;
 };
 
 

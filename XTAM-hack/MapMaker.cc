@@ -276,6 +276,7 @@ bool MapMaker::InitFromStereo(KeyFrame &kF,
   KeyFrame *pkSecond = new KeyFrame();
   *pkFirst = kF;
   *pkSecond = kS;
+  //mSecondKF = kS;
   
   pkFirst->bFixed = true;
   pkFirst->se3CfromW = SE3<>();
@@ -411,6 +412,9 @@ bool MapMaker::InitFromStereo(KeyFrame &kF,
   cout << mMap.vpPoints[maxDepthIndex]->v3WorldPos[0] << " " 
        << mMap.vpPoints[maxDepthIndex]->v3WorldPos[1] << " "
        << mMap.vpPoints[maxDepthIndex]->v3WorldPos[2] << endl;
+
+  mMap.minInitDepth = minDepth;
+  mMap.maxInitDepth = maxDepth;
 
   return true; 
 }
@@ -581,7 +585,7 @@ bool MapMaker::AddPointEpipolar(KeyFrame &kSrc,
   double dEndDepth = min(40 * mdWiggleScale, dMean + dSigma);
   
   Vector<3> v3CamCenter_TC = kTarget.se3CfromW * kSrc.se3CfromW.inverse().get_translation(); // The camera end
-  Vector<3> v3RayStart_TC = v3CamCenter_TC + dStartDepth * v3LineDirn_TC;                               // the far-away end
+  Vector<3> v3RayStart_TC = v3CamCenter_TC + dStartDepth * v3LineDirn_TC;                               // the far-away start 
   Vector<3> v3RayEnd_TC = v3CamCenter_TC + dEndDepth * v3LineDirn_TC;                               // the far-away end
 
   

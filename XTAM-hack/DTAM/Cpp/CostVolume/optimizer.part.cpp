@@ -36,7 +36,10 @@ void Cost::initOptimization(){ // Must be thread safe in allocations(i.e. don't 
 
     int w = cols;
     int h = rows;
+
+    // Compute the weight of Huber norm, thus matrix G
     cacheGValues();
+
     cv::Mat loInd(rows, cols, CV_32SC1);
     cv::Mat loVal(rows, cols, CV_32FC1);
 
@@ -76,9 +79,9 @@ void Cost::cacheGValues(){
     int w = cols;
     int h = rows;
     cout<< "Caching G values"<<"\n";
-    _gbig.create(h+2, w, CV_32FC1);  // Enough room to safely read off the ends
+    _gbig.create(h+2, w, CV_32FC1);  // Enough room to safely read off the ends, see it as a one-dimension array
                                      // Data will be garbage, but we don't care since we don't use it anyway
-    _g = Mat(h, w, CV_32FC1, (float*)(_gbig.data)+w); // Begin from the second row since the added surrounding
+    _g = Mat(h, w, CV_32FC1, (float*)(_gbig.data) + w); // Begin from the second row since the added surrounding
     
     // Up, Down, Left and Right
     // If we read/write off the end of these something is wrong.
@@ -123,13 +126,15 @@ void Cost::cacheGValues(){
     gy = cv::max(g1,g2);
     
     // L1 norm
-    //_g = gx + gy;
+    _g = gx + gy;
 
     // L2 norm
+    /*
     Mat squareX = gx.mul(gx);
     Mat squareY = gy.mul(gy);
     _g = gx + gy;
     sqrt(_g, _g);
+    */
     
     toc();
     // The g function (Eq. 5)
@@ -152,7 +157,7 @@ void Cost::cacheGValues(){
     pfShow("g", _g, 0, Vec2d(0,1));
 }
 
-static inline float afunc(float* data,float theta,float d,float ds,int a,float lambda){
+static inline float afunc(float* data, float theta, float d, float ds, int a, float lambda){
     return 1.0/(2.0*theta)*ds*ds*(d-a)*(d-a) + data[a]*lambda; // Literal implementation of Eq.14, note the datastep^2 factor to scale correctly
     //return 1.0/(2.0*theta)*(d-a)*(d-a) + data[a]*lambda; // Forget the ds^2 factor for better numerical behavior(sometimes)
     //return std::abs(1.0/(2.0*theta)*ds*ds*(d-a)) + data[a]*lambda; // L1 Version
@@ -178,13 +183,13 @@ inline float Cost::aBasic(float* data, float l, float ds, float d, float& value)
         }
     }
     
-    if(vnext < mv){// Last was best
+    if(vnext < mv){ // Last was best
         value = vnext;
         return (float)l - 1;
     }
     
     if(mi == 0) { // First was best
-        value=mv;
+        value = mv;
         return (float)mi;
     }
     
@@ -197,7 +202,7 @@ inline float Cost::aBasic(float* data, float l, float ds, float d, float& value)
     
     //cout<<"A"<<A<<" B"<<B<<" C"<<C<<" Ret:"<<delt+float(mi)<<endl;
     //assert(fabs(delt)<=.5);
-    return delt + float(mi);
+    return delt + float(mi); // Newton step
 }
 
 static void* Cost_optimizeQD(void* object);
@@ -246,7 +251,7 @@ void Cost::optimize(){
         while(running_qd)
           usleep(100);
 
-        launch_optimzer_threads(this);
+        launch_optimzer_threads(this); // Launch QD and A optimisation
     }else{
         cout<<"Already running optimizer!"<<"\n";
     }
@@ -286,7 +291,7 @@ void Cost::optimizeQD(){
     float* gl = (float*)(_gl.data);
     float* gr = (float*)(_gr.data);
 
-    computeSigmas();
+    computeSigmas(); // Compute the optimal sigmas each time
     assert(sigma_q != 0.0);
     assert(sigma_d != 0.0);
     
@@ -301,8 +306,8 @@ tic();
         
         qcore(
             denom,
-            point, 
-            pstop, 
+            point,  // start of the row
+            pstop,  // end of the row
             kx,
             ky,
             d,
@@ -311,7 +316,7 @@ tic();
             gl,
             gr,
             sigma_q,
-            w);
+            w); // columns
 
         point = pstop;
         
@@ -365,7 +370,7 @@ toc();
     // core
     st corestop = w*(h-1);
     for(; pstop < corestop; ) {
-        // left core
+        // left core, the left most
         pstop++;
         d[here] = (d[here] - sigma_d*(gup*ky[up] + gdown*ky[here] + gright*kx[here] - a[here]/theta))/denom;
         point++;
@@ -376,7 +381,7 @@ toc();
             d[here] = (d[here] - sigma_d*(gup*ky[up] + gdown*ky[here] + gleft*kx[left] + gright*kx[here] - a[here]/theta))/denom;
         }
 
-        //right core
+        //right core, the right most
         pstop++;
         d[here] = (d[here] - sigma_d*(gup*ky[up] + gdown*ky[here] + gleft*kx[left] - a[here]/theta))/denom;
         point++;
@@ -384,7 +389,7 @@ toc();
     assert(point == pstop);
     assert(pstop == corestop);
 
-    // left bottom
+    // bottom left
     pstop++;
     d[here] = (d[here] - sigma_d*(gup*ky[up] + gright*kx[here] - a[here]/theta))/denom;
     point++;
@@ -395,15 +400,15 @@ toc();
         d[here] = (d[here] - sigma_d*(gup*ky[up] + gleft*kx[left] + gright*kx[here] - a[here]/theta))/denom;
     }
 
-    // bottom left
+    // bottom right
     pstop++;
     d[here] = (d[here] - sigma_d*(gup*ky[up] + gleft*kx[left] - a[here]/theta))/denom;
     point++;
 
     //debug
-    //pfShow("qx",abs(_qx));
-    //pfShow("d",_d);
-    //pfShow("a",_a);
+    //pfShow("qx", abs(_qx));
+    //pfShow("d", _d);
+    //pfShow("a", _a);
     
     assert(aptr == _a.data);
     gcheck();
@@ -415,19 +420,20 @@ void Cost::optimizeA(){
     //usleep(1);
     theta = theta*thetaStep; // update theta
 
+    // Control the convergence of the optimisation, balance between fast convergence and high quality
     if (QDruncount > 1000){
         thetaStep = .97;
     }
 
-    if (theta<thetaMin) { // Done optimizing!
+    if (theta < thetaMin) { // Done optimizing!
         running_a = false;
         gpause();
         //initOptimization();
         stableDepth = _d.clone(); // Always choose more regularized version
         _qx = 0.0;
         _qy = 0.0;
-        _d=stableDepth.clone(); // QD might be running, return the depth to it
-        theta = thetaStart;
+        _d = stableDepth.clone(); // QD might be running, return the depth to it
+        theta = thetaStart; // Prepare for the next optimisation
     }
 
     cout<<"A optimization run: "<<Aruncount++<<endl;
@@ -441,7 +447,6 @@ void Cost::optimizeA(){
     int l = layers;
     
     float ds = depthStep; 
-
     
     // a update
     for(st point = 0; point < w*h; point++){ // foreach pixel
@@ -466,7 +471,7 @@ void Cost::optimizeA(){
 //     cout<<"Total Energy: "<<Ed+Ee<<endl;
 }
 
-static void __attribute__ ((noinline)) qcore(
+static void __attribute__ ((noinline)) qcore( // Update q of inner points of image
     const float denom,
     st point, 
     const st pstop, 
@@ -478,16 +483,17 @@ static void __attribute__ ((noinline)) qcore(
     const float* gl,
     const float* gr,
     const float& sigma_q,
-    const unsigned& w){
+    const unsigned& w)
+{
     float nm,pd,kxn,kyn;
-    for (; point < pstop; point++){ // foreach pixel
+    for (; point < pstop; point++) { // foreach pixel
         // Unnumbered Eq.s at end of section 2.2.3
         // Sign is flipped due to caching a negative value
         //cout<<sigma_q<<endl;
         kxn = (kx[here] + sigma_q*((d[here] - d[right])*gright))/denom;
         kyn = (ky[here] + sigma_q*((d[here] - d[down])*gdown))/denom;
         nm = sqrt(kxn*kxn + kyn*kyn); // L2 norm
-        pd = std::max(1.0f,nm);
+        pd = std::max(1.0f, nm); // Pi function
         kx[here] = kxn/pd;
         ky[here] = kyn/pd;
         //kx[here] = d[here] - d[right];
